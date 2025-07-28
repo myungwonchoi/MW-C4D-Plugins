@@ -1,0 +1,24 @@
+#ifndef _Tmwvisibility_H_
+#define _Tmwvisibility_H_
+
+enum
+{
+    MWVISIBILITY_ACTIVE_VIS         = 1000,
+	MWVISIBILITY_VIEWPORT           = 1001,
+	MWVISIBILITY_RENDER             = 1002,
+    //MWVISIBILITY_VISON_STATE        = 1003,
+    //MWVISIBILITY_VISON_DEFAULT    = 2,
+    //MWVISIBILITY_VISON_ON         = 0,
+    MWVISIBILITY_SCALE_VIS_OFF      = 1010,
+    MWVISIBILITY_VISGROUP           = 1100,
+    MWVISIBILITY_VISFRAME_ADD       = 1101,
+    MWVISIBILITY_VISFRAME_DEL       = 1102,
+    //MWVISIBILITY_VISFRAME           = 1101,
+    //MWVISIBILITY_VIS_QUICKTAB       = 1102,
+    //MWVISIBILITY_VIS_DEFAULT        = 2,
+    //MWVISIBILITY_VIS_ON             = 0,
+    //MWVISIBILITY_VIS_OFF            = 1,
+    MWVISIBILITY_BAKEKEYFRAME      = 2000,
+}
+
+#endif

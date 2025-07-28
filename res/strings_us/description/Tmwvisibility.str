@@ -1,0 +1,20 @@
+STRINGTABLE Tmwvisibility
+{
+	Tmwvisibility                	"MW Visibility Tag";
+	MWVISIBILITY_ACTIVE_VIS			"Visibility Setting";
+	//MWVISIBILITY_VISON_STATE		"Visible State";
+	//MWVISIBILITY_VISON_DEFAULT	"Default";
+	//MWVISIBILITY_VISON_ON			"On";
+    MWVISIBILITY_SCALE_VIS_OFF   	"Visible Scale Value";
+    MWVISIBILITY_VIEWPORT         	"Viewport Visibility";
+	MWVISIBILITY_RENDER          	"Render Visibility";
+	MWVISIBILITY_VISGROUP			"Visibility Toggle Frames";
+	MWVISIBILITY_VISFRAME_ADD		"Add Frame";
+	MWVISIBILITY_VISFRAME_DEL		"Delete Frame";
+	//MWVISIBILITY_VISFRAME			"Frame";
+	//MWVISIBILITY_VIS_QUICKTAB		"Visibility";
+	//MWVISIBILITY_VIS_DEFAULT		"Default";
+	//MWVISIBILITY_VIS_ON				"On";
+	//MWVISIBILITY_VIS_OFF			"Off";
+	MWVISIBILITY_BAKEKEYFRAME     	"Bake Keyframe and Delete This Tag";
+}
