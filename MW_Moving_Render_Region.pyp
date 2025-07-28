@@ -3,7 +3,7 @@ import math
 from c4d import gui, plugins
 
 PLUGIN_ID = 1065393
-AAAA = 50
+AAAA = 100
 
 class MWMovingRenderRegion(gui.GeDialog):
     ID_BORDER = 2101
