@@ -1,22 +1,28 @@
 import c4d
 import math
 from c4d import gui, plugins
+from c4d.modules import snap 
 
-PLUGIN_ID = 1065393
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+from utils import mw_utils
+
+PLUGIN_ID = 1065393 # 플러그인 ID
+
 class MWMovingRenderRegion(gui.GeDialog):
-    ID_USE_MERGED_OBJECT = 2501  # Generated or Deformed Mesh 체크박스 ID
     ID_BORDER = 2101
+    ID_USE_DEFORMED_MESH = 2501  # Deformed Mesh 체크박스 ID
     ID_OBJECTSLIST = 2301
     ID_CALCULATE_CURFRAME = 2201
     ID_CALCULATE_ALLFRAME = 2202
-    ID_BAKERENDERREGION = 2203  # 변경: Key -> Bake
+    ID_BAKERENDERREGION = 2203
     ID_GET_SELECTED_OBJECTS = 2401  # 추가: Get Selected Objects 버튼 아이디
 
     INITW = 110
     INITH = 10
 
     border = 0
-    
     op_Region = {}
     data_Region = []
     objList = None
@@ -56,11 +62,11 @@ class MWMovingRenderRegion(gui.GeDialog):
         self.GroupEnd()
 
 
-        # Generated or Deformed Mesh 체크박스 추가
+        # Deformed Mesh 체크박스 추가
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
         self.AddStaticText(0, c4d.BFH_LEFT, name="Settings", initw=self.INITW, inith=self.INITH)
-        self.AddCheckbox(self.ID_USE_MERGED_OBJECT, c4d.BFH_LEFT, initw=self.INITW * 2, inith=self.INITH+2, name="Deformed Mesh (Slow)")
-        self.SetBool(self.ID_USE_MERGED_OBJECT, False)  # 기본값: 체크해제
+        self.AddCheckbox(self.ID_USE_DEFORMED_MESH, c4d.BFH_LEFT, initw=self.INITW * 2, inith=self.INITH+2, name="Deformed Mesh (Slow)")
+        self.SetBool(self.ID_USE_DEFORMED_MESH, False)  # 기본값: 체크해제
         self.GroupEnd()
         
         # Calculate 버튼 추가
@@ -86,7 +92,8 @@ class MWMovingRenderRegion(gui.GeDialog):
         return True
 
     def DestroyWindow(self):
-        self.DeleteRenderRegionGuide()
+        doc = c4d.documents.GetActiveDocument()
+        self.DeleteRenderRegionGuide(doc)
 
     def Command(self, Id, msg):
         # 추가: Get Selected Objects 버튼 동작
@@ -124,17 +131,20 @@ class MWMovingRenderRegion(gui.GeDialog):
             
             self.DeleteRenderRegionGuide(doc) # 이전 가이드 삭제
 
+            use_deformed_mesh = self.GetBool(self.ID_USE_DEFORMED_MESH)
+
             if Id == self.ID_CALCULATE_CURFRAME: # 현재 프레임 영역 계산
                 self.data_Region = [{}]
-                use_merged = self.GetBool(self.ID_USE_MERGED_OBJECT)
-                if use_merged:
-                    merged_object = self.GetMergedObject(op, doc)
-                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
+                if use_deformed_mesh:
+                    # 병합된 오브젝트의 렌더 영역 계산
+                    deformed_mesh = mw_utils.GetFullCache(op, parent=True, deform=True)
+                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(deformed_mesh, rbd)
                     self.ShowObjectRegion(self.op_Region, doc, rbd)
-                    merged_object.Remove()
                 else:
-                    # 여러 오브젝트(PointObject 리스트)를 GetObjectFrameRange에 직접 전달
-                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, doc, rbd)
+                    # mw_utils.GetAllChildren를 사용하여 모든 자식 오브젝트 포함
+                    op = mw_utils.GetAllChildren(op)
+                    # 선택된 오브젝트의 렌더 영역 계산
+                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, rbd)
                     self.ShowObjectRegion(self.op_Region, doc, rbd)
                 self.data_Region[0]['x1'] = max((self.op_Region['x1'] - safeFrame['cl']) / safeFrame_width, 0.0)
                 self.data_Region[0]['x2'] = min((-self.op_Region['x2']  + safeFrame['cr']) / safeFrame_width, 1.0)
@@ -148,6 +158,7 @@ class MWMovingRenderRegion(gui.GeDialog):
                 for obj in op:
                     doc.AddUndo(c4d.UNDOTYPE_BITS, obj)  # 언도 추가
                     doc.SetSelection(obj , mode=c4d.SELECTION_ADD)
+
             elif Id == self.ID_CALCULATE_ALLFRAME: # 전체 프레임 영역 계산 (Octane만)
                 def SetCurrentFrame(frame, doc):
                     doc.SetTime(c4d.BaseTime(frame, doc.GetFps()))
@@ -162,15 +173,13 @@ class MWMovingRenderRegion(gui.GeDialog):
                 startFrame = doc.GetLoopMinTime().GetFrame(fps)
                 endFrame = doc.GetLoopMaxTime().GetFrame(fps)
                 self.data_Region = []
-                use_merged = self.GetBool(self.ID_USE_MERGED_OBJECT)
                 for iFrame in range(startFrame, endFrame + 1):
                     SetCurrentFrame(iFrame, doc)
-                    if use_merged:
-                        merged_object = self.GetMergedObject(op, doc)
-                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
-                        merged_object.Remove()
+                    if use_deformed_mesh:
+                        deformed_mesh = mw_utils.GetFullCache(op, parent=True, deform=True)
+                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(deformed_mesh, rbd)
                     else:
-                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, doc, rbd)
+                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, rbd)
                     self.data_Region.append({})
                     self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
                     self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
@@ -251,8 +260,9 @@ class MWMovingRenderRegion(gui.GeDialog):
                 c4d.EventAdd()
         return True
 
-    def DeleteRenderRegionGuide(self, doc=c4d.documents.GetActiveDocument()):
+    def DeleteRenderRegionGuide(self, doc):
         """Delete all splines in the document."""
+
         for op in doc.GetObjects():
             if op.GetName().find('MW_OBJECT_RENDER_REGION') != -1:
                 doc.AddUndo(c4d.UNDOTYPE_DELETE, op)
@@ -260,8 +270,7 @@ class MWMovingRenderRegion(gui.GeDialog):
         c4d.EventAdd()
 
     def GetMergedObject(self, op, doc):
-        # Insert clones of all input objects under a new null object and insert that null object into
-        # the dummy document.
+        """Create a merged clone of all input objects in a dummy document and return that merged object."""
         null = c4d.BaseObject(c4d.Onull)
 
         for node in op:
@@ -293,11 +302,8 @@ class MWMovingRenderRegion(gui.GeDialog):
                                             bc=bc, 
                                             doc=doc, 
                                             flags=c4d.MODELINGCOMMANDFLAGS_CREATEUNDO)
-        
-
         if not res:
             raise RuntimeError("Modelling command failed.")
-
 
         # The 'Join' command returns its result in the return value of SendModelingCommand()
         joinResult = res[0].GetClone()
@@ -309,31 +315,21 @@ class MWMovingRenderRegion(gui.GeDialog):
         if not isinstance(joinResult, c4d.PointObject):
             raise RuntimeError("Return value is not a point object.")
 
-    
-        # print('Join Result: ', joinResult)
         return joinResult
 
-    def GetObjectFrameRange(self, op, doc, rbd):
-        rbd = doc.GetRenderBaseDraw()
+    def GetObjectFrameRange(self, op, rbd):
         pointX = []
         pointY = []
         if op is None:
             msg = "Please select an object."
             raise ValueError(msg)
 
-        def GetCacheMesh(obj):
-            # 프리미티브/제너레이터의 최종 캐시만 재귀적으로 추출 (DeformCache는 사용하지 않음)
-            cache = obj.GetCache()
-            if cache:
-                if isinstance(cache, c4d.BaseObject):
-                    return GetCacheMesh(cache)
-            if isinstance(obj, c4d.PointObject):
-                return obj
-            return None
-
         op_list = op if isinstance(op, list) else [op] # op가 하나면 리스트로 변환
+        meshes = []
         for obj in op_list:
-            mesh = GetCacheMesh(obj)
+            meshes.extend(mw_utils.GetFullCache(obj, parent=True, deform=False))
+
+        for mesh in meshes:
             if not isinstance(mesh, c4d.PointObject):
                 continue
             mg = mesh.GetMg() # 오브젝트 매트릭스
