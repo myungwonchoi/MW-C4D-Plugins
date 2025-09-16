@@ -75,10 +75,7 @@ class MWMovingRenderRegion(gui.GeDialog):
         # Set accepted object types into InExclude custom GUI settings  
         settings[c4d.DESC_ACCEPT] = accepted
         self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 0, settings)
-        # self.AddMultiLineEditText(self.ID_OBJECTSLIST, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT)
-        # doc = c4d.documents.GetActiveDocument()
-        # self.SetString(self.ID_OBJECTSLIST, "\n".join([obj.GetName() for obj in doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_NONE | c4d.GETACTIVEOBJECTFLAGS_SELECTIONORDER)]))
-        # self.Enable(self.ID_OBJECTSLIST, False)
+
         self.GroupEnd()
 
         self.GroupEnd()
