@@ -122,7 +122,7 @@ class MWMovingRenderRegion(gui.GeDialog):
                 gui.MessageDialog("Please Drag and Drop the object(s) to the Object List.")
                 return False
             
-            self.DeleteRenderRegionGuide() # 이전 가이드 삭제
+            self.DeleteRenderRegionGuide(doc) # 이전 가이드 삭제
 
             if Id == self.ID_CALCULATE_CURFRAME: # 현재 프레임 영역 계산
                 self.data_Region = [{}]
@@ -250,9 +250,8 @@ class MWMovingRenderRegion(gui.GeDialog):
                     curve_y2.InsertKey(key_y2)
                 c4d.EventAdd()
         return True
-    
-    def DeleteRenderRegionGuide(self):
-        doc = c4d.documents.GetActiveDocument()
+
+    def DeleteRenderRegionGuide(self, doc=c4d.documents.GetActiveDocument()):
         """Delete all splines in the document."""
         for op in doc.GetObjects():
             if op.GetName().find('MW_OBJECT_RENDER_REGION') != -1:
@@ -404,8 +403,8 @@ class MWMovingRenderRegion(gui.GeDialog):
         borderSpline.SetName('MW_OBJECT_RENDER_REGION_BORDERSPLINE')
 
         if frame is not None:
-            self.AddVisibilityTrack(rectSpline, frame)
-            self.AddVisibilityTrack(borderSpline, frame)
+            self.AddVisibilityTrack(rectSpline, frame, doc)
+            self.AddVisibilityTrack(borderSpline, frame, doc)
 
         # Insert the rectangle spline into the document
         rectSpline.ChangeNBit(c4d.NBIT_OHIDE, c4d.NBITCONTROL_SET)
@@ -417,10 +416,8 @@ class MWMovingRenderRegion(gui.GeDialog):
         doc.AddUndo(c4d.UNDOTYPE_NEW, borderSpline)
         return True
 
-    def AddVisibilityTrack(self, op, frame):
+    def AddVisibilityTrack(self, op, frame, doc):
         if not op: return
-
-        doc = c4d.documents.GetActiveDocument()
         if not doc: return
 
         #create a new visibility track
