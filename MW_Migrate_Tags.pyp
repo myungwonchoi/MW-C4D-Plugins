@@ -284,7 +284,7 @@ class MigrateTagsDialogCommand(c4d.plugins.CommandData):
 
 if __name__ == "__main__":
     directory, _ = os.path.split(__file__)
-    fn = os.path.join(directory, "res", "MW Migrate Tags.tif")
+    fn = os.path.join(directory, "res", "MW_Migrate_Tags.tif")
 
     # Creates a BaseBitmap
     bmp = c4d.bitmaps.BaseBitmap()

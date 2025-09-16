@@ -10,36 +10,37 @@ class MWMovingRenderRegion(gui.GeDialog):
     ID_OBJECTSLIST = 2301
     ID_CALCULATE_CURFRAME = 2201
     ID_CALCULATE_ALLFRAME = 2202
-    ID_BAKERENDERREGION = 2203
-    ID_RENDERER = 2001
-    ID_RENDERER_OCT = 2002
-    ID_RENDERER_RS = 2003
+    ID_KEYRENDERREGION = 2203  # 변경: Bake -> Key
+    ID_GET_SELECTED_OBJECTS = 2401  # 추가: Get Selected Objects 버튼 아이디
 
     border = 0
     
     op_Region = {}
     data_Region = []
-    renderTab = None
     objList = None
 
     def CreateLayout(self):
         """This Method is called automatically when Cinema 4D Create the Layout (display) of the Dialog."""
         # Defines the title of the Dialog
-        self.SetTitle("MW Object Render Region")
+        self.SetTitle("MW Moving Render Region")
 
         self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 1, 1)
-        self.GroupBorderSpace(5, 5, 5, 5)
+        self.GroupBorderSpace(15, 5, 5, 5)
 
-        self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_TOP, 2, 1, "", 0)
-        self.AddStaticText(0, c4d.BFH_LEFT, name="Renderer", initw=120)
+        # 추가: Get Selected Objects 버튼
+        self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
+        self.AddButton(self.ID_GET_SELECTED_OBJECTS, c4d.BFH_LEFT, name="Get Selected Objects")
+        self.GroupEnd()
 
-        bc = c4d.BaseContainer()
-        bc.SetBool(c4d.QUICKTAB_SHOWSINGLE, True)
-        bc.SetBool(c4d.QUICKTAB_NOMULTISELECT, True)
-        self.renderTab = self.AddCustomGui(1003, c4d.CUSTOMGUI_QUICKTAB, '',
-                            c4d.BFH_LEFT | c4d.BFV_SCALEFIT, 450, 0, bc)
-        self.renderTab.AppendString(self.ID_RENDERER_OCT, "Octane", True)
-        self.renderTab.AppendString(self.ID_RENDERER_RS, "Redshift (C4D)", False)
+        self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 2, 1)
+        self.AddStaticText(1000, c4d.BFH_LEFT | c4d.BFV_TOP, name="Objects", initw=120)
+        # Build accepted object types
+        accepted = c4d.BaseContainer()
+        accepted.InsData(c4d.Obase, "")
+        settings = c4d.BaseContainer()
+        # Set accepted object types into InExclude custom GUI settings  
+        settings[c4d.DESC_ACCEPT] = accepted
+        self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 0, settings)
         self.GroupEnd()
 
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 3, 1)
@@ -48,11 +49,11 @@ class MWMovingRenderRegion(gui.GeDialog):
         self.AddEditNumberArrows(self.ID_BORDER, c4d.BFH_LEFT, initw=80)
         self.GroupEnd()
 
-        self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
+        self.GroupBegin(0, c4d.BFH_SCALEFIT, 3, 1)
         self.AddStaticText(0, c4d.BFH_LEFT, name="Calculate", initw=120)
-        self.AddButton(self.ID_CALCULATE_CURFRAME, c4d.BFH_SCALEFIT, name="Calculate Object Region (Current Frame)")
-        self.AddStaticText(0, c4d.BFH_LEFT, name="", initw=120)
-        self.AddButton(self.ID_CALCULATE_ALLFRAME, c4d.BFH_SCALEFIT, name="Calculate Object Region (All Frames)")
+        self.AddButton(self.ID_CALCULATE_CURFRAME, c4d.BFH_SCALEFIT, name="Current Frame")
+        # self.AddStaticText(0, c4d.BFH_LEFT, name="", initw=120)
+        self.AddButton(self.ID_CALCULATE_ALLFRAME, c4d.BFH_SCALEFIT, name="All Frames")
         self.GroupEnd()
         
         self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_TOP, cols=1)
@@ -61,21 +62,8 @@ class MWMovingRenderRegion(gui.GeDialog):
         self.GroupEnd()
         
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
-        self.AddStaticText(0, c4d.BFH_LEFT, name="Bake", initw=120)
-        self.AddButton(self.ID_BAKERENDERREGION, c4d.BFH_SCALEFIT, name="Bake Render Region")        
-        self.GroupEnd()
-
-        self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 2, 1)
-        self.AddStaticText(1000, c4d.BFH_LEFT | c4d.BFV_TOP, name="Objects", initw=120)
-    
-        # Build accepted object types
-        accepted = c4d.BaseContainer()
-        accepted.InsData(c4d.Obase, "")
-        settings = c4d.BaseContainer()
-        # Set accepted object types into InExclude custom GUI settings  
-        settings[c4d.DESC_ACCEPT] = accepted
-        self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 0, settings)
-
+        self.AddStaticText(0, c4d.BFH_LEFT, name="Key", initw=120)  # 변경: Bake -> Key
+        self.AddButton(self.ID_KEYRENDERREGION, c4d.BFH_SCALEFIT, name="Key Render Region")  # 변경: Bake -> Key
         self.GroupEnd()
 
         self.GroupEnd()
@@ -85,45 +73,49 @@ class MWMovingRenderRegion(gui.GeDialog):
         self.DeleteRenderRegionGuide()
 
     def Command(self, Id, msg):
+        # 추가: Get Selected Objects 버튼 동작
+        if Id == self.ID_GET_SELECTED_OBJECTS:
+            doc = c4d.documents.GetActiveDocument()
+            selected_objs = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_NONE | c4d.GETACTIVEOBJECTFLAGS_SELECTIONORDER)
+            if not selected_objs:
+                gui.MessageDialog("No objects selected.")
+                return True
+            # InExcludeData로 변환
+            inexclude = c4d.InExcludeData()
+            for obj in selected_objs:
+                inexclude.InsertObject(obj, 1)
+            self.objList.SetData(inexclude)
+            c4d.EventAdd()
+            return True
+
         if Id == self.ID_CALCULATE_CURFRAME or Id == self.ID_CALCULATE_ALLFRAME:
             doc = c4d.documents.GetActiveDocument()
-
             doc.StartUndo()
-
             border = self.GetInt32(self.ID_BORDER)
             rdt = doc.GetActiveRenderData()
             rbd = doc.GetRenderBaseDraw()
             safeFrame = rbd.GetSafeFrame()
             safeFrame_width = safeFrame['cr'] - safeFrame['cl']
             safeFrame_height = safeFrame['cb'] - safeFrame['ct']
-
             # op = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_NONE | c4d.GETACTIVEOBJECTFLAGS_SELECTIONORDER)
             op = []
             for iobj in range(self.objList.GetData().GetObjectCount()):
                 op.append(self.objList.GetData().ObjectFromIndex(doc, iobj))
-
             if op == []:
                 gui.MessageDialog("Please Drag and Drop the object(s) to the Object List.")
                 return False
-            
             self.DeleteRenderRegionGuide()
-
             if Id == self.ID_CALCULATE_CURFRAME: # 현재 프레임 영역 계산
                 self.data_Region = [{}]
                 merged_object = self.GetMergedObject(op, doc)
-
-                self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] \
-                = self.GetObjectFrameRange(merged_object, doc, rbd)
+                self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
                 self.ShowObjectRegion(self.op_Region, doc, rbd)
                 merged_object.Remove()
-
-
                 self.data_Region[0]['x1'] = max((self.op_Region['x1'] - safeFrame['cl']) / safeFrame_width, 0.0)
                 self.data_Region[0]['x2'] = min((-self.op_Region['x2']  + safeFrame['cr']) / safeFrame_width, 1.0)
                 self.data_Region[0]['y1'] = max((self.op_Region['y1']  - safeFrame['ct']) / safeFrame_height, 0.0)
                 self.data_Region[0]['y2'] = min((-self.op_Region['y2'] + safeFrame['cb']) / safeFrame_height, 1.0)
                 print('Object Region: ', self.data_Region[0])
-
                 self.data_Region[0]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
                 self.data_Region[0]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
                 self.data_Region[0]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
@@ -132,12 +124,11 @@ class MWMovingRenderRegion(gui.GeDialog):
                 print('border: ', border)
                 print('safeFrame: ', safeFrame)
                 print('Object Region: ', self.data_Region[0])
-
                 c4d.CallCommand(12113)  # Deselect All
                 for obj in op:
                     doc.AddUndo(c4d.UNDOTYPE_BITS, obj)  # 언도 추가
                     doc.SetSelection(obj , mode=c4d.SELECTION_ADD)
-            elif Id == self.ID_CALCULATE_ALLFRAME: # 전체 프레임 영역 계산
+            elif Id == self.ID_CALCULATE_ALLFRAME: # 전체 프레임 영역 계산 (Octane만)
                 def SetCurrentFrame(frame, doc):
                     doc.SetTime(c4d.BaseTime(frame, doc.GetFps()))
                     doc.ExecutePasses(None, True, True, True, 0)
@@ -151,61 +142,20 @@ class MWMovingRenderRegion(gui.GeDialog):
                 startFrame = doc.GetLoopMinTime().GetFrame(fps)
                 endFrame = doc.GetLoopMaxTime().GetFrame(fps)
                 self.data_Region = []
-                
-                if self.renderTab.IsSelected(self.ID_RENDERER_OCT): # Octane Render
-                    for iFrame in range(startFrame, endFrame + 1):
-                        SetCurrentFrame(iFrame, doc)
+                for iFrame in range(startFrame, endFrame + 1):
+                    SetCurrentFrame(iFrame, doc)
+                    merged_object = self.GetMergedObject(op, doc)
+                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
+                    self.data_Region.append({})
+                    self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
+                    self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
+                    self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
+                    self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
+                    self.data_Region[-1]['frame'] = iFrame
+                    merged_object.Remove()
+                    self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)
+                    c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
 
-                        merged_object = self.GetMergedObject(op, doc)
-
-                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] \
-                        = self.GetObjectFrameRange(merged_object, doc, rbd)
-
-                        self.data_Region.append({})
-                        self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
-                        self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
-                        self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
-                        self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
-                        self.data_Region[-1]['frame'] = iFrame
-
-                        merged_object.Remove()
-                        self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)
-                        c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)   
-                elif self.renderTab.IsSelected(self.ID_RENDERER_RS): # Redshift | Cinema 4D
-                    op_Region_Previous = {}
-                    self.data_Region = []
-
-                    for iFrame in range(startFrame, endFrame + 1):
-                        SetCurrentFrame(iFrame, doc)
-                        merged_object = self.GetMergedObject(op, doc)
-
-                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] \
-                        = self.GetObjectFrameRange(merged_object, doc, rbd)
-
-                        if iFrame == startFrame:
-                            op_Region_Previous['x1'], op_Region_Previous['x2'], op_Region_Previous['y1'], op_Region_Previous['y2'] \
-                            = self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2']
-                        
-                        self.op_Region['x1'] = min(self.op_Region['x1'], op_Region_Previous['x1'])
-                        self.op_Region['x2'] = max(self.op_Region['x2'], op_Region_Previous['x2'])
-                        self.op_Region['y1'] = min(self.op_Region['y1'], op_Region_Previous['y1'])
-                        self.op_Region['y2'] = max(self.op_Region['y2'], op_Region_Previous['y2'])
-
-                        self.data_Region.append({})
-                        self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
-                        self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
-                        self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
-                        self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)                        
-                        self.data_Region[-1]['frame'] = iFrame
-
-
-                        op_Region_Previous['x1'], op_Region_Previous['x2'], op_Region_Previous['y1'], op_Region_Previous['y2'] \
-                            = self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2']
-                        
-                        merged_object.Remove()
-                        self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)   
-                        c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)      
-                
                 SetCurrentFrame(originFrame, doc)
                 c4d.CallCommand(12113)  # Deselect All
                 for obj in op:
@@ -215,108 +165,65 @@ class MWMovingRenderRegion(gui.GeDialog):
             doc.EndUndo()
             c4d.EventAdd()   
 
-        if Id == self.ID_BAKERENDERREGION:
+        if Id == self.ID_KEYRENDERREGION:  # 변경: Bake -> Key
             doc = c4d.documents.GetActiveDocument()
             rdt = doc.GetActiveRenderData()
             octane = rdt.GetFirstVideoPost()
-
+            if rdt[c4d.RDATA_RENDERENGINE] != 1029525: # Octane Render만 허용
+                gui.MessageDialog("Please set the render engine to Octane Render.")
+                return False
             if len(self.data_Region) == 1:
-                if self.renderTab.IsSelected(self.ID_RENDERER_OCT):
-                    if rdt[c4d.RDATA_RENDERENGINE] != 1029525: # Check Octane Render
-                        gui.MessageDialog("Please set the render engine to Octane Render.")
-                        return False 
-                    rdt[c4d.RDATA_RENDERREGION] = False
-
-                    # Remove existing tracks if they exist
-                    existing_track_x1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
-                    existing_track_x2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
-                    existing_track_y1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y1, c4d.DTYPE_REAL, 0)))
-                    existing_track_y2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y2, c4d.DTYPE_REAL, 0)))
-
-                    octane[c4d.VP_RENDERREGION] = True
-                    octane[c4d.VP_REGION_X1] = self.data_Region[0]['x1']
-                    octane[c4d.VP_REGION_X2] = self.data_Region[0]['x2']
-                    octane[c4d.VP_REGION_Y1] = self.data_Region[0]['y1']
-                    octane[c4d.VP_REGION_Y2] = self.data_Region[0]['y2']
-                elif self.renderTab.IsSelected(self.ID_RENDERER_RS):
-                    if (rdt[c4d.RDATA_RENDERENGINE] != 1036219 and
-                        rdt[c4d.RDATA_RENDERENGINE] != 0 and
-                        rdt[c4d.RDATA_RENDERENGINE] != 1023342 and
-                        rdt[c4d.RDATA_RENDERENGINE] != 300001061):
-                        gui.MessageDialog("Please set the render engine to Redshift or Standard or Physical Render.")
-                        return False
-                    rdt[c4d.RDATA_RENDERREGION] = True
-                    rdt[c4d.RDATA_RENDERREGION_LEFT] = self.data_Region[0]['x1'] * rdt[c4d.RDATA_XRES_VIRTUAL]
-                    rdt[c4d.RDATA_RENDERREGION_RIGHT] = self.data_Region[0]['x2'] * rdt[c4d.RDATA_XRES_VIRTUAL]
-                    rdt[c4d.RDATA_RENDERREGION_TOP] = self.data_Region[0]['y1'] * rdt[c4d.RDATA_YRES_VIRTUAL]
-                    rdt[c4d.RDATA_RENDERREGION_BOTTOM] = self.data_Region[0]['y2'] * rdt[c4d.RDATA_YRES_VIRTUAL]
+                rdt[c4d.RDATA_RENDERREGION] = False
+                # Remove existing tracks if they exist
+                existing_track_x1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
+                existing_track_x2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
+                existing_track_y1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y1, c4d.DTYPE_REAL, 0)))
+                existing_track_y2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y2, c4d.DTYPE_REAL, 0)))
+                octane[c4d.VP_RENDERREGION] = True
+                octane[c4d.VP_REGION_X1] = self.data_Region[0]['x1']
+                octane[c4d.VP_REGION_X2] = self.data_Region[0]['x2']
+                octane[c4d.VP_REGION_Y1] = self.data_Region[0]['y1']
+                octane[c4d.VP_REGION_Y2] = self.data_Region[0]['y2']
                 c4d.EventAdd()
             elif len(self.data_Region) > 1:
-                if self.renderTab.IsSelected(self.ID_RENDERER_OCT):
-                    if rdt[c4d.RDATA_RENDERENGINE] != 1029525: # Check Octane Render
-                        gui.MessageDialog("Please set the render engine to Octane Render.")
-                        return False 
-                        # Create a new visibility track for Octane render region
-                    # Remove existing tracks if they exist
-                    existing_track_x1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
-                    existing_track_x2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
-                    existing_track_y1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y1, c4d.DTYPE_REAL, 0)))
-                    existing_track_y2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y2, c4d.DTYPE_REAL, 0)))
-
-                    if existing_track_x1: track_x1 = existing_track_x1.Remove()
-                    if existing_track_x2: track_x2 = existing_track_x2.Remove()
-                    if existing_track_y1: track_y1 = existing_track_y1.Remove()
-                    if existing_track_y2: track_y2 = existing_track_y2.Remove()
-                    
-                    track_x1 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
-                    track_x2 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
-                    track_y1 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y1, c4d.DTYPE_REAL, 0)))
-                    track_y2 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y2, c4d.DTYPE_REAL, 0)))
-
-                    octane.InsertTrackSorted(track_x1)
-                    octane.InsertTrackSorted(track_x2)
-                    octane.InsertTrackSorted(track_y1)
-                    octane.InsertTrackSorted(track_y2)
-
-                    curve_x1 = track_x1.GetCurve()
-                    curve_x2 = track_x2.GetCurve()
-                    curve_y1 = track_y1.GetCurve()
-                    curve_y2 = track_y2.GetCurve()
-
-                    print('Data Region: ', self.data_Region)
-                    for iData in self.data_Region:
-                        key_x1 = c4d.CKey()
-                        key_x1.SetTime(curve_x1, c4d.BaseTime(iData['frame'] / doc.GetFps()))
-                        key_x1.SetValue(curve_x1, iData['x1'])
-                        curve_x1.InsertKey(key_x1)
-
-                        key_x2 = c4d.CKey()
-                        key_x2.SetTime(curve_x2, c4d.BaseTime(iData['frame'] / doc.GetFps()))
-                        key_x2.SetValue(curve_x2, iData['x2'])
-                        curve_x2.InsertKey(key_x2)
-
-                        key_y1 = c4d.CKey()
-                        key_y1.SetTime(curve_y1, c4d.BaseTime(iData['frame'] / doc.GetFps()))
-                        key_y1.SetValue(curve_y1, iData['y1'])
-                        curve_y1.InsertKey(key_y1)
-
-                        key_y2 = c4d.CKey()
-                        key_y2.SetTime(curve_y2, c4d.BaseTime(iData['frame'] / doc.GetFps()))
-                        key_y2.SetValue(curve_y2, iData['y2'])
-                        curve_y2.InsertKey(key_y2)
-                elif self.renderTab.IsSelected(self.ID_RENDERER_RS):
-                    if (rdt[c4d.RDATA_RENDERENGINE] != 1036219 and
-                        rdt[c4d.RDATA_RENDERENGINE] != 0 and
-                        rdt[c4d.RDATA_RENDERENGINE] != 1023342 and
-                        rdt[c4d.RDATA_RENDERENGINE] != 300001061):
-                        gui.MessageDialog("Please set the render engine to Redshift or Standard or Physical Render.")
-                        return False
-                    rdt[c4d.RDATA_RENDERREGION] = True
-                    rdt[c4d.RDATA_RENDERREGION_LEFT] = int(self.data_Region[0]['x1'] * rdt[c4d.RDATA_XRES_VIRTUAL])
-                    rdt[c4d.RDATA_RENDERREGION_RIGHT] = int(self.data_Region[0]['x2'] * rdt[c4d.RDATA_XRES_VIRTUAL])
-                    rdt[c4d.RDATA_RENDERREGION_TOP] = int(self.data_Region[0]['y1'] * rdt[c4d.RDATA_YRES_VIRTUAL])
-                    rdt[c4d.RDATA_RENDERREGION_BOTTOM] = int(self.data_Region[0]['y2'] * rdt[c4d.RDATA_YRES_VIRTUAL])
-                
+                # Remove existing tracks if they exist
+                existing_track_x1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
+                existing_track_x2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
+                existing_track_y1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y1, c4d.DTYPE_REAL, 0)))
+                existing_track_y2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y2, c4d.DTYPE_REAL, 0)))
+                if existing_track_x1: existing_track_x1.Remove()
+                if existing_track_x2: existing_track_x2.Remove()
+                if existing_track_y1: existing_track_y1.Remove()
+                if existing_track_y2: existing_track_y2.Remove()
+                track_x1 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
+                track_x2 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
+                track_y1 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y1, c4d.DTYPE_REAL, 0)))
+                track_y2 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y2, c4d.DTYPE_REAL, 0)))
+                octane.InsertTrackSorted(track_x1)
+                octane.InsertTrackSorted(track_x2)
+                octane.InsertTrackSorted(track_y1)
+                octane.InsertTrackSorted(track_y2)
+                curve_x1 = track_x1.GetCurve()
+                curve_x2 = track_x2.GetCurve()
+                curve_y1 = track_y1.GetCurve()
+                curve_y2 = track_y2.GetCurve()
+                for iData in self.data_Region:
+                    key_x1 = c4d.CKey()
+                    key_x1.SetTime(curve_x1, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_x1.SetValue(curve_x1, iData['x1'])
+                    curve_x1.InsertKey(key_x1)
+                    key_x2 = c4d.CKey()
+                    key_x2.SetTime(curve_x2, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_x2.SetValue(curve_x2, iData['x2'])
+                    curve_x2.InsertKey(key_x2)
+                    key_y1 = c4d.CKey()
+                    key_y1.SetTime(curve_y1, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_y1.SetValue(curve_y1, iData['y1'])
+                    curve_y1.InsertKey(key_y1)
+                    key_y2 = c4d.CKey()
+                    key_y2.SetTime(curve_y2, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_y2.SetValue(curve_y2, iData['y2'])
+                    curve_y2.InsertKey(key_y2)
                 c4d.EventAdd()
         return True
     

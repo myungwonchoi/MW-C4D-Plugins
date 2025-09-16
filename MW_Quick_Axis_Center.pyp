@@ -428,7 +428,7 @@ class QuickAxisCenterCommand(c4d.plugins.CommandData):
 
 if __name__ == "__main__": # main
     directory, _ = os.path.split(__file__)
-    fn = os.path.join(directory, "res", "MW Quick Axis Center.tif")
+    fn = os.path.join(directory, "res", "MW_Quick_Axis_Center.tif")
 
     # Creates a BaseBitmap
     bmp = c4d.bitmaps.BaseBitmap()
