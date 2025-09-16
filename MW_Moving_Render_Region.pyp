@@ -3,15 +3,17 @@ import math
 from c4d import gui, plugins
 
 PLUGIN_ID = 1065393
-AAAA = 100
-
 class MWMovingRenderRegion(gui.GeDialog):
+    ID_USE_MERGED_OBJECT = 2501  # Generated or Deformed Mesh 체크박스 ID
     ID_BORDER = 2101
     ID_OBJECTSLIST = 2301
     ID_CALCULATE_CURFRAME = 2201
     ID_CALCULATE_ALLFRAME = 2202
-    ID_KEYRENDERREGION = 2203  # 변경: Bake -> Key
+    ID_BAKERENDERREGION = 2203  # 변경: Key -> Bake
     ID_GET_SELECTED_OBJECTS = 2401  # 추가: Get Selected Objects 버튼 아이디
+
+    INITW = 110
+    INITH = 10
 
     border = 0
     
@@ -29,41 +31,55 @@ class MWMovingRenderRegion(gui.GeDialog):
 
         # 추가: Get Selected Objects 버튼
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
-        self.AddButton(self.ID_GET_SELECTED_OBJECTS, c4d.BFH_LEFT, name="Get Selected Objects")
+        self.AddStaticText(1000, c4d.BFH_LEFT | c4d.BFV_TOP, name="", initw=self.INITW, inith=self.INITH)
+
+        self.AddButton(self.ID_GET_SELECTED_OBJECTS, c4d.BFH_LEFT, name="Get Selected Objects", inith=self.INITH)
         self.GroupEnd()
 
+        # 오브젝트 리스트 추가
         self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 2, 1)
-        self.AddStaticText(1000, c4d.BFH_LEFT | c4d.BFV_TOP, name="Objects", initw=120)
+        self.AddStaticText(1000, c4d.BFH_LEFT | c4d.BFV_TOP, name="Objects", initw=self.INITW, inith=self.INITH)
         # Build accepted object types
         accepted = c4d.BaseContainer()
         accepted.InsData(c4d.Obase, "")
         settings = c4d.BaseContainer()
         # Set accepted object types into InExclude custom GUI settings  
         settings[c4d.DESC_ACCEPT] = accepted
-        self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 0, settings)
+        self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, self.INITW, self.INITH, settings)
         self.GroupEnd()
 
-        self.GroupBegin(0, c4d.BFH_SCALEFIT, 3, 1)
-        self.AddStaticText(1002, c4d.BFH_LEFT, name="Border (px)", initw=120)
+        # Border 입력 필드 추가 
+        self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
+        self.AddStaticText(0, c4d.BFH_LEFT, name="Border", initw=self.INITW, inith=self.INITH)
         self.SetInt32(self.ID_BORDER, self.border)
-        self.AddEditNumberArrows(self.ID_BORDER, c4d.BFH_LEFT, initw=80)
+        self.AddEditNumberArrows(self.ID_BORDER, c4d.BFH_LEFT, initw=80, inith=self.INITH)
         self.GroupEnd()
 
-        self.GroupBegin(0, c4d.BFH_SCALEFIT, 3, 1)
-        self.AddStaticText(0, c4d.BFH_LEFT, name="Calculate", initw=120)
-        self.AddButton(self.ID_CALCULATE_CURFRAME, c4d.BFH_SCALEFIT, name="Current Frame")
-        # self.AddStaticText(0, c4d.BFH_LEFT, name="", initw=120)
-        self.AddButton(self.ID_CALCULATE_ALLFRAME, c4d.BFH_SCALEFIT, name="All Frames")
+
+        # Generated or Deformed Mesh 체크박스 추가
+        self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
+        self.AddStaticText(0, c4d.BFH_LEFT, name="Settings", initw=self.INITW, inith=self.INITH)
+        self.AddCheckbox(self.ID_USE_MERGED_OBJECT, c4d.BFH_LEFT, initw=self.INITW * 2, inith=self.INITH+2, name="Deformed Mesh (Slow)")
+        self.SetBool(self.ID_USE_MERGED_OBJECT, False)  # 기본값: 체크해제
         self.GroupEnd()
         
+        # Calculate 버튼 추가
+        self.GroupBegin(0, c4d.BFH_SCALEFIT, 3, 1)
+        self.AddStaticText(0, c4d.BFH_LEFT, name="Calculate", initw=self.INITW, inith=self.INITH)
+        self.AddButton(self.ID_CALCULATE_CURFRAME, c4d.BFH_SCALEFIT, name="Current Frame", initw=self.INITW, inith=self.INITH)
+        self.AddButton(self.ID_CALCULATE_ALLFRAME, c4d.BFH_SCALEFIT, name="All Frames", initw=self.INITW, inith=self.INITH)
+        self.GroupEnd()
+        
+        # 구분선
         self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_TOP, cols=1)
         self.GroupBorderSpace(0,2,0,2)
         self.AddSeparatorH(0, flags=c4d.BFH_SCALEFIT)
         self.GroupEnd()
-        
+
+        # Bake 버튼 추가
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
-        self.AddStaticText(0, c4d.BFH_LEFT, name="Key", initw=120)  # 변경: Bake -> Key
-        self.AddButton(self.ID_KEYRENDERREGION, c4d.BFH_SCALEFIT, name="Key Render Region")  # 변경: Bake -> Key
+        self.AddStaticText(0, c4d.BFH_LEFT, name="Bake", initw=self.INITW, inith=self.INITH)  # 변경: Key -> Bake
+        self.AddButton(self.ID_BAKERENDERREGION, c4d.BFH_SCALEFIT, name="Bake Render Region", initw=self.INITW, inith=self.INITH)  # 변경: Key -> Bake
         self.GroupEnd()
 
         self.GroupEnd()
@@ -97,33 +113,37 @@ class MWMovingRenderRegion(gui.GeDialog):
             safeFrame = rbd.GetSafeFrame()
             safeFrame_width = safeFrame['cr'] - safeFrame['cl']
             safeFrame_height = safeFrame['cb'] - safeFrame['ct']
-            # op = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_NONE | c4d.GETACTIVEOBJECTFLAGS_SELECTIONORDER)
+
             op = []
             for iobj in range(self.objList.GetData().GetObjectCount()):
                 op.append(self.objList.GetData().ObjectFromIndex(doc, iobj))
+
             if op == []:
                 gui.MessageDialog("Please Drag and Drop the object(s) to the Object List.")
                 return False
-            self.DeleteRenderRegionGuide()
+            
+            self.DeleteRenderRegionGuide() # 이전 가이드 삭제
+
             if Id == self.ID_CALCULATE_CURFRAME: # 현재 프레임 영역 계산
                 self.data_Region = [{}]
-                merged_object = self.GetMergedObject(op, doc)
-                self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
-                self.ShowObjectRegion(self.op_Region, doc, rbd)
-                merged_object.Remove()
+                use_merged = self.GetBool(self.ID_USE_MERGED_OBJECT)
+                if use_merged:
+                    merged_object = self.GetMergedObject(op, doc)
+                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
+                    self.ShowObjectRegion(self.op_Region, doc, rbd)
+                    merged_object.Remove()
+                else:
+                    # 여러 오브젝트(PointObject 리스트)를 GetObjectFrameRange에 직접 전달
+                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, doc, rbd)
+                    self.ShowObjectRegion(self.op_Region, doc, rbd)
                 self.data_Region[0]['x1'] = max((self.op_Region['x1'] - safeFrame['cl']) / safeFrame_width, 0.0)
                 self.data_Region[0]['x2'] = min((-self.op_Region['x2']  + safeFrame['cr']) / safeFrame_width, 1.0)
                 self.data_Region[0]['y1'] = max((self.op_Region['y1']  - safeFrame['ct']) / safeFrame_height, 0.0)
                 self.data_Region[0]['y2'] = min((-self.op_Region['y2'] + safeFrame['cb']) / safeFrame_height, 1.0)
-                print('Object Region: ', self.data_Region[0])
                 self.data_Region[0]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
                 self.data_Region[0]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
                 self.data_Region[0]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
                 self.data_Region[0]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
-                print('self.op_Region: ', self.op_Region)
-                print('border: ', border)
-                print('safeFrame: ', safeFrame)
-                print('Object Region: ', self.data_Region[0])
                 c4d.CallCommand(12113)  # Deselect All
                 for obj in op:
                     doc.AddUndo(c4d.UNDOTYPE_BITS, obj)  # 언도 추가
@@ -142,17 +162,21 @@ class MWMovingRenderRegion(gui.GeDialog):
                 startFrame = doc.GetLoopMinTime().GetFrame(fps)
                 endFrame = doc.GetLoopMaxTime().GetFrame(fps)
                 self.data_Region = []
+                use_merged = self.GetBool(self.ID_USE_MERGED_OBJECT)
                 for iFrame in range(startFrame, endFrame + 1):
                     SetCurrentFrame(iFrame, doc)
-                    merged_object = self.GetMergedObject(op, doc)
-                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
+                    if use_merged:
+                        merged_object = self.GetMergedObject(op, doc)
+                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(merged_object, doc, rbd)
+                        merged_object.Remove()
+                    else:
+                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, doc, rbd)
                     self.data_Region.append({})
                     self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
                     self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
                     self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
                     self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
                     self.data_Region[-1]['frame'] = iFrame
-                    merged_object.Remove()
                     self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)
                     c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
 
@@ -165,7 +189,7 @@ class MWMovingRenderRegion(gui.GeDialog):
             doc.EndUndo()
             c4d.EventAdd()   
 
-        if Id == self.ID_KEYRENDERREGION:  # 변경: Bake -> Key
+        if Id == self.ID_BAKERENDERREGION:  # 변경: Key -> Bake
             doc = c4d.documents.GetActiveDocument()
             rdt = doc.GetActiveRenderData()
             octane = rdt.GetFirstVideoPost()
@@ -280,7 +304,6 @@ class MWMovingRenderRegion(gui.GeDialog):
         joinResult = res[0].GetClone()
         res[0].Remove()
         null.Remove() # Remove the null object from the dummy document.
-        # doc.InsertObject(joinResult)
 
         if not isinstance(joinResult, c4d.BaseObject):
             raise RuntimeError("Unexpected return value for Join tool.")
@@ -293,23 +316,38 @@ class MWMovingRenderRegion(gui.GeDialog):
 
     def GetObjectFrameRange(self, op, doc, rbd):
         rbd = doc.GetRenderBaseDraw()
-
-        pointX = list(); pointY = list()
-
+        pointX = []
+        pointY = []
         if op is None:
             msg = "Please select an object."
             raise ValueError(msg)
-        if not isinstance(op, c4d.PointObject):
-            raise TypeError("Please select a point object.")
-        mg = op.GetMg()  # the global transform of the node
-        points = [p * mg for p in op.GetAllPoints()]
-        # print('Points: ', points)
-        for ipoint in points:
-            pointPos = rbd.WS(ipoint)
-            pointX.append(math.ceil(pointPos.x))
-            pointY.append(math.ceil(pointPos.y))
 
+        def GetCacheMesh(obj):
+            # 프리미티브/제너레이터의 최종 캐시만 재귀적으로 추출 (DeformCache는 사용하지 않음)
+            cache = obj.GetCache()
+            if cache:
+                if isinstance(cache, c4d.BaseObject):
+                    return GetCacheMesh(cache)
+            if isinstance(obj, c4d.PointObject):
+                return obj
+            return None
+
+        op_list = op if isinstance(op, list) else [op] # op가 하나면 리스트로 변환
+        for obj in op_list:
+            mesh = GetCacheMesh(obj)
+            if not isinstance(mesh, c4d.PointObject):
+                continue
+            mg = mesh.GetMg() # 오브젝트 매트릭스
+            points = [p * mg for p in mesh.GetAllPoints()] # 월드 좌표로 변환
+            for ipoint in points:
+                pointPos = rbd.WS(ipoint)
+                pointX.append(math.ceil(pointPos.x))
+                pointY.append(math.ceil(pointPos.y))
+
+        if not pointX or not pointY:
+            raise ValueError("선택된 오브젝트에 포인트가 없습니다.")
         return [min(pointX), max(pointX), min(pointY), max(pointY)]
+
 
     def ShowObjectRegion(self, pos: dict, doc, rbd, frame=None):
         # Create a rectangle spline based on the object region
