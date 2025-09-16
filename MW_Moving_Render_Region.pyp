@@ -269,54 +269,6 @@ class MWMovingRenderRegion(gui.GeDialog):
                 op.Remove()
         c4d.EventAdd()
 
-    def GetMergedObject(self, op, doc):
-        """Create a merged clone of all input objects in a dummy document and return that merged object."""
-        null = c4d.BaseObject(c4d.Onull)
-
-        for node in op:
-            aliastrans = c4d.AliasTrans()
-            if not aliastrans or not aliastrans.Init(doc):
-                return False
-            if node.GetUp() is None:
-                clone = node.GetClone(c4d.COPYFLAGS_NONE, aliastrans)
-                clone.InsertUnderLast(null)
-            elif node.GetUp() is not None:
-                tempParent = c4d.BaseObject(c4d.Onull)
-                tempParent.SetMg(node.GetUp().GetMg())
-                clone = node.GetClone(c4d.COPYFLAGS_NONE, aliastrans)
-                clone.InsertUnderLast(tempParent)
-                tempParent.InsertUnderLast(null)
-            aliastrans.Translate(True)
-
-        doc.InsertObject(null)
-
-        # The settings of the 'Join' tool.
-        bc = c4d.BaseContainer()
-        # Merge possibly existing selection tags.
-        bc[c4d.MDATA_JOIN_MERGE_SELTAGS] = True
-
-        # Execute the Join command in the dummy document.
-        res = c4d.utils.SendModelingCommand(command=c4d.MCOMMAND_JOIN, 
-                                            list=[null], 
-                                            mode=c4d.MODELINGCOMMANDMODE_ALL, 
-                                            bc=bc, 
-                                            doc=doc, 
-                                            flags=c4d.MODELINGCOMMANDFLAGS_CREATEUNDO)
-        if not res:
-            raise RuntimeError("Modelling command failed.")
-
-        # The 'Join' command returns its result in the return value of SendModelingCommand()
-        joinResult = res[0].GetClone()
-        res[0].Remove()
-        null.Remove() # Remove the null object from the dummy document.
-
-        if not isinstance(joinResult, c4d.BaseObject):
-            raise RuntimeError("Unexpected return value for Join tool.")
-        if not isinstance(joinResult, c4d.PointObject):
-            raise RuntimeError("Return value is not a point object.")
-
-        return joinResult
-
     def GetObjectFrameRange(self, op, rbd):
         pointX = []
         pointY = []
