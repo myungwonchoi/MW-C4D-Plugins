@@ -38,6 +38,7 @@ def GetFullCache(objects, parent=True, deform=True) -> list:
     :param deform: DeformCache도 탐색할지 여부 :type deform: bool
     :return: 최종 캐시 메쉬 오브젝트 리스트 :rtype: list[c4d.PointObject]
     """
+    print("objects:", objects)
     if objects is None:
         return []
     object_list = objects if isinstance(objects, list) else [objects]
@@ -57,7 +58,7 @@ def GetFullCache(objects, parent=True, deform=True) -> list:
         if cache_obj is not None:
             _recurse(cache_obj)
         else:
-            if not current_obj.GetBit(c4d.BIT_CONTROLOBJECT):
+            if not current_obj.GetBit(c4d.BIT_CONTROLOBJECT): # 제너레이터로 생성된 오브젝트는 무시
                 if current_obj.IsInstanceOf(c4d.Opolygon):
                     result_meshes.append(current_obj)
         # 하위 오브젝트 재귀
