@@ -38,7 +38,7 @@ def GetFullCache(objects, parent=True, deform=True) -> list:
     :param deform: DeformCache도 탐색할지 여부 :type deform: bool
     :return: 최종 캐시 메쉬 오브젝트 리스트 :rtype: list[c4d.PointObject]
     """
-    print("objects:", objects)
+    # print("objects:", objects)
     if objects is None:
         return []
     object_list = objects if isinstance(objects, list) else [objects]
@@ -126,3 +126,11 @@ def GetMergedObject(self, op, doc): #Deprecated
         raise RuntimeError("Return value is not a point object.")
 
     return joinResult
+
+
+def SelectObjects(objects, doc):
+    c4d.CallCommand(12113)  # Deselect All
+    for obj in objects:
+        doc.AddUndo(c4d.UNDOTYPE_BITS, obj)  # 언도 추가
+        doc.SetSelection(obj , mode=c4d.SELECTION_ADD)
+    c4d.EventAdd()  # 뷰포트 업데이트

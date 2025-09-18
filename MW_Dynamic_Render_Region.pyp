@@ -1,5 +1,6 @@
 import c4d
 import math
+from c4d import bitmaps
 from c4d import gui, plugins
 from c4d.modules import snap 
 
@@ -21,27 +22,26 @@ class MWDynamicRenderRegion(gui.GeDialog):
     INITW = 100
     INITH = 10
 
-    border = 0
+    border = 30
     op_Region = {}
     data_Region = []
     objList = None
 
     def CreateLayout(self):
-        """This Method is called automatically when Cinema 4D Create the Layout (display) of the Dialog."""
         # Defines the title of the Dialog
-        self.SetTitle("MW Moving Render Region")
+        self.SetTitle("MW Dynamic Render Region(Octane)")
 
-        self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 1, 1)
+        self.GroupBegin(0, c4d.BFH_SCALEFIT, 1, 1)
         self.GroupBorderSpace(15, 5, 5, 5)
 
-    # Add: Get Selected Objects button
+        # Add: Get Selected Objects button
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
         self.AddStaticText(1000, c4d.BFH_LEFT | c4d.BFV_TOP, name="", initw=self.INITW, inith=self.INITH)
 
         self.AddButton(self.ID_GET_SELECTED_OBJECTS, c4d.BFH_LEFT, name="Get Selected Objects", inith=self.INITH)
         self.GroupEnd()
 
-    # Add object list
+        # Add object list
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
         self.AddStaticText(1000, c4d.BFH_LEFT | c4d.BFV_TOP, name="Objects", initw=self.INITW, inith=self.INITH)
         # Build accepted object types
@@ -53,30 +53,27 @@ class MWDynamicRenderRegion(gui.GeDialog):
         self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT, self.INITW, self.INITH, settings)
         self.GroupEnd()
 
-    # Add Border input field
+        # Add Border input field
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
         self.AddStaticText(0, c4d.BFH_LEFT, name="Border", initw=self.INITW, inith=self.INITH)
         self.SetInt32(self.ID_BORDER, self.border)
         self.AddEditNumberArrows(self.ID_BORDER, c4d.BFH_LEFT, initw=80, inith=self.INITH)
         self.GroupEnd()
 
-
-        # ...deformed mesh 관련 UI 제거...
-        
-    # Add Calculate buttons
+        # Add Calculate buttons
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 3, 1)
         self.AddStaticText(0, c4d.BFH_LEFT, name="Calculate", initw=self.INITW, inith=self.INITH)
         self.AddButton(self.ID_CALCULATE_CURFRAME, c4d.BFH_SCALEFIT, name="Current Frame", initw=self.INITW, inith=self.INITH)
         self.AddButton(self.ID_CALCULATE_ALLFRAME, c4d.BFH_SCALEFIT, name="All Frames", initw=self.INITW, inith=self.INITH)
         self.GroupEnd()
         
-    # Separator
+        # Separator
         self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_TOP, cols=1)
         self.GroupBorderSpace(0,2,0,2)
         self.AddSeparatorH(0, flags=c4d.BFH_SCALEFIT)
         self.GroupEnd()
 
-    # Add Bake button
+        # Add Bake button
         self.GroupBegin(0, c4d.BFH_SCALEFIT, 2, 1)
         self.AddStaticText(0, c4d.BFH_LEFT, name="Bake", initw=self.INITW, inith=self.INITH)
         self.AddButton(self.ID_BAKERENDERREGION, c4d.BFH_SCALEFIT, name="Bake Render Region", initw=self.INITW, inith=self.INITH) # 버튼 추가
@@ -87,12 +84,10 @@ class MWDynamicRenderRegion(gui.GeDialog):
         return True
 
     def DestroyWindow(self):
-        doc = c4d.documents.GetActiveDocument()
-        self.DeleteRenderRegionGuide(doc)
+        self.DeleteRenderRegionGuide(c4d.documents.GetActiveDocument())
 
     def Command(self, Id, msg):
-    # Add: Get Selected Objects button action
-        if Id == self.ID_GET_SELECTED_OBJECTS:
+        if Id == self.ID_GET_SELECTED_OBJECTS: # Get Selected Objects 버튼을 눌렀을 때
             doc = c4d.documents.GetActiveDocument()
             selected_objs = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_NONE | c4d.GETACTIVEOBJECTFLAGS_SELECTIONORDER)
             if not selected_objs:
@@ -105,8 +100,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
             self.objList.SetData(inexclude)
             c4d.EventAdd()
             return True
-
-        if Id == self.ID_CALCULATE_CURFRAME or Id == self.ID_CALCULATE_ALLFRAME:
+        elif Id == self.ID_CALCULATE_CURFRAME or Id == self.ID_CALCULATE_ALLFRAME: # Calculate 버튼을 눌렀을 때
             doc = c4d.documents.GetActiveDocument()
             doc.StartUndo()
             border = self.GetInt32(self.ID_BORDER)
@@ -117,90 +111,100 @@ class MWDynamicRenderRegion(gui.GeDialog):
             safeFrame_height = safeFrame['cb'] - safeFrame['ct']
 
             op = []
-            for iobj in range(self.objList.GetData().GetObjectCount()):
+            for iobj in range(self.objList.GetData().GetObjectCount()): # Get objects from InExcludeData
                 op.append(self.objList.GetData().ObjectFromIndex(doc, iobj))
 
-            if op == []:
+            if op == []: # 선택된 오브젝트가 없을 때
                 gui.MessageDialog("Please drag and drop the object(s) to the Object List.")
                 return False
-            
+
             self.DeleteRenderRegionGuide(doc) # Delete previous guides
 
-            # 항상 deformed=True로 동작
-            if Id == self.ID_CALCULATE_CURFRAME: # Calculate region for current frame
-                self.data_Region = [{}]
-                self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, rbd)
-                self.ShowObjectRegion(self.op_Region, doc, rbd)
-                self.data_Region[0]['x1'] = max((self.op_Region['x1'] - safeFrame['cl']) / safeFrame_width, 0.0)
-                self.data_Region[0]['x2'] = min((-self.op_Region['x2']  + safeFrame['cr']) / safeFrame_width, 1.0)
-                self.data_Region[0]['y1'] = max((self.op_Region['y1']  - safeFrame['ct']) / safeFrame_height, 0.0)
-                self.data_Region[0]['y2'] = min((-self.op_Region['y2'] + safeFrame['cb']) / safeFrame_height, 1.0)
-                self.data_Region[0]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
-                self.data_Region[0]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
-                self.data_Region[0]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
-                self.data_Region[0]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
+            objectFrameRange = self.GetObjectFrameRange(op, rbd)
 
-                self.Enable(self.ID_BAKERENDERREGION, True) # 버튼 활성화
-                """
-                c4d.CallCommand(12113)  # Deselect All
-                for obj in op:
-                    doc.AddUndo(c4d.UNDOTYPE_BITS, obj)  # 언도 추가
-                    doc.SetSelection(obj , mode=c4d.SELECTION_ADD)
-                """
+            # Solo Mode 설정
+            bc = snap.GetSnapSettings(doc)
+            current_mode = bc[c4d.VIEWPORT_SOLO_MODE]
+            # 0: off, 1: on(no hierarchy), 2: on+hierarchy
+            
+            mw_utils.SelectObjects(op, doc)
+            if current_mode == 0 or current_mode is None: # 1. 솔로 off (0 or None)
+                c4d.CallCommand(431000059) # Viewport Solo Single (on)
+                c4d.CallCommand(431000060) # Viewport Solo Hierarchy (on)
+            elif current_mode == 1: # 2. 솔로 on Hierarchy Off (1)
+                c4d.CallCommand(431000059) # Viewport Solo (off)
+                c4d.CallCommand(431000059) # Viewport Solo (on)
+                c4d.CallCommand(431000060) # Viewport Solo Hierarchy (on)
+            elif current_mode == 2: # 3. 솔로 on Hierarchy On (2)
+                c4d.CallCommand(431000059) # Viewport Solo (off)
+                c4d.CallCommand(431000059) # Viewport Solo (on)
+            c4d.EventAdd()
 
-            elif Id == self.ID_CALCULATE_ALLFRAME: # Calculate region for all frames (Octane only)
-                def SetCurrentFrame(frame, doc):
-                    doc.SetTime(c4d.BaseTime(frame, doc.GetFps()))
-                    doc.ExecutePasses(None, True, True, True, 0)
-                    c4d.GeSyncMessage(c4d.EVMSG_TIMECHANGED)
-                    c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
-                    c4d.EventAdd()
-                rdt = doc.GetActiveRenderData()
-                rbd = doc.GetRenderBaseDraw()
-                fps = doc.GetFps()
-                originFrame = doc.GetTime().GetFrame(fps)
-                startFrame = doc.GetLoopMinTime().GetFrame(fps)
-                endFrame = doc.GetLoopMaxTime().GetFrame(fps)
-                self.data_Region = []
-                for iFrame in range(startFrame, endFrame + 1):
-                    SetCurrentFrame(iFrame, doc)
-                    deformed_mesh = mw_utils.GetFullCache(op, parent=True, deform=True)
-                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(deformed_mesh, rbd)
-                    self.data_Region.append({})
-                    self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
-                    self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
-                    self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
-                    self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
-                    self.data_Region[-1]['frame'] = iFrame
-                    self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)
-                    c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
 
-                self.Enable(self.ID_BAKERENDERREGION, True) # 버튼 활성화
-                SetCurrentFrame(originFrame, doc)
-                """
-                c4d.CallCommand(12113)  # Deselect All
-                for obj in op:
-                    doc.AddUndo(c4d.UNDOTYPE_BITS, obj)  # 언도 추가
-                    doc.SetSelection(obj , mode=c4d.SELECTION_ADD)
-                """
+            if objectFrameRange:
+                if Id == self.ID_CALCULATE_CURFRAME: # Calculate Current Frame
+                    self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = objectFrameRange
+                    self.ShowObjectRegion(self.op_Region, doc, rbd)
+                    self.data_Region = [{}]
+                    self.data_Region[0]['x1'] = max((self.op_Region['x1'] - safeFrame['cl']) / safeFrame_width, 0.0)
+                    self.data_Region[0]['x2'] = min((-self.op_Region['x2']  + safeFrame['cr']) / safeFrame_width, 1.0)
+                    self.data_Region[0]['y1'] = max((self.op_Region['y1']  - safeFrame['ct']) / safeFrame_height, 0.0)
+                    self.data_Region[0]['y2'] = min((-self.op_Region['y2'] + safeFrame['cb']) / safeFrame_height, 1.0)
+                    self.data_Region[0]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
+                    self.data_Region[0]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
+                    self.data_Region[0]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
+                    self.data_Region[0]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
+
+                    self.Enable(self.ID_BAKERENDERREGION, True) # 버튼 활성화
+                elif Id == self.ID_CALCULATE_ALLFRAME: # Calculate All Frames
+                    def SetCurrentFrame(frame, doc):
+                        doc.SetTime(c4d.BaseTime(frame, doc.GetFps()))
+                        doc.ExecutePasses(None, True, True, True, 0)
+                        c4d.GeSyncMessage(c4d.EVMSG_TIMECHANGED)
+                        c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
+                        c4d.EventAdd()
+                    rdt = doc.GetActiveRenderData()
+                    rbd = doc.GetRenderBaseDraw()
+                    fps = doc.GetFps()
+                    originFrame = doc.GetTime().GetFrame(fps)
+                    startFrame = doc.GetLoopMinTime().GetFrame(fps)
+                    endFrame = doc.GetLoopMaxTime().GetFrame(fps)
+                    self.data_Region = []
+                    for iFrame in range(startFrame, endFrame + 1):
+                        SetCurrentFrame(iFrame, doc)
+                        self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, rbd)
+                        self.data_Region.append({})
+                        self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
+                        self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
+                        self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
+                        self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
+                        self.data_Region[-1]['frame'] = iFrame
+                        self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)
+                        c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
+
+                    self.Enable(self.ID_BAKERENDERREGION, True) # 버튼 활성화
+                    SetCurrentFrame(originFrame, doc)
+            
             doc.EndUndo()
-            c4d.EventAdd()   
+            c4d.CallCommand(431000059) # Viewport Solo Off
+            c4d.CallCommand(431000060) # Viewport Solo Off
+            c4d.EventAdd()
 
-        if Id == self.ID_BAKERENDERREGION:  
-            if rdt[c4d.RDATA_RENDERENGINE] != 1029525: # 옥테인 렌더 ID
+
+        elif Id == self.ID_BAKERENDERREGION: # Bake Render Region 버튼을 눌렀을 때
+            doc = c4d.documents.GetActiveDocument()
+            rdt = doc.GetActiveRenderData() # Get render settings
+
+            if rdt[c4d.RDATA_RENDERENGINE] != 1029525: # 옥테인 렌더 ID가 아닐 때
                 gui.MessageDialog("Please set the Renderer to Octane Render.")
                 return False
-
-            confirm = gui.QuestionDialog("Are you sure you want to bake the Render Region?"
-                                " (Existing Render Region keyframes will be overwritten)")
-            if not confirm:
-                return True
-            doc = c4d.documents.GetActiveDocument()
-            rdt = doc.GetActiveRenderData()
+            
             octane = rdt.GetFirstVideoPost()
+            confirm = gui.QuestionDialog("Are you sure you want to Bake the Render Region?"
+                                " (Existing Render Region Keyframes will be overwritten)")
+            if not confirm: return True
             
             if len(self.data_Region) == 1:
-                rdt[c4d.RDATA_RENDERREGION] = False
                 # Remove existing tracks if they exist
                 existing_track_x1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
                 existing_track_x2 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
@@ -215,7 +219,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 octane[c4d.VP_REGION_X2] = self.data_Region[0]['x2']
                 octane[c4d.VP_REGION_Y1] = self.data_Region[0]['y1']
                 octane[c4d.VP_REGION_Y2] = self.data_Region[0]['y2']
-                c4d.EventAdd()
+                gui.MessageDialog("The Render Region has been applied to the current render settings.")
             elif len(self.data_Region) > 1:
                 # Remove existing tracks if they exist
                 existing_track_x1 = octane.FindCTrack(c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
@@ -256,11 +260,10 @@ class MWDynamicRenderRegion(gui.GeDialog):
                     key_y2.SetValue(curve_y2, iData['y2'])
                     curve_y2.InsertKey(key_y2)
                 c4d.EventAdd()
-        return True
+                gui.MessageDialog("The Render Region has been applied to the current render settings.")
 
     def DeleteRenderRegionGuide(self, doc):
         """Delete all splines in the document."""
-
         for op in doc.GetObjects():
             if op.GetName().find('MW_OBJECT_RENDER_REGION') != -1:
                 doc.AddUndo(c4d.UNDOTYPE_DELETE, op)
@@ -268,7 +271,6 @@ class MWDynamicRenderRegion(gui.GeDialog):
         c4d.EventAdd()
 
     def GetObjectFrameRange(self, op, rbd):
-        print(op)
         pointX = []
         pointY = []
         if op is None:
@@ -291,7 +293,9 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 pointY.append(math.ceil(pointPos.y))
 
         if not pointX or not pointY:
-            raise ValueError("No points found in the selected object(s).")
+            gui.MessageDialog("The selected object(s) have no points.\n"
+                        "Please check that they are a polygon mesh or that one is included as a child object.") # 메시지 박스 표시
+            return False 
         return [min(pointX), max(pointX), min(pointY), max(pointY)]
 
 
@@ -299,7 +303,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
         # Create a rectangle spline based on the object region
         rectSpline = c4d.BaseObject(c4d.Ospline)
         borderSpline = c4d.BaseObject(c4d.Ospline)
-        safeFrame = rbd.GetSafeFrame()
+        safeFrame = rbd.GetSafeFrame() 
         rectSpline.ResizeObject(4)  # A rectangle spline has 4 points
         borderSpline.ResizeObject(4)  # A rectangle spline has 4 points
 
@@ -391,6 +395,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
 
     def CoreMessage(self, id, msg):
         return super().CoreMessage(id, msg)
+    
         if id == c4d.EVMSG_CHANGE:
             # print("EVMSG_CHANGE")
             doc = c4d.documents.GetActiveDocument()
@@ -444,22 +449,29 @@ class MWDynamicRenderRegionCommand(plugins.CommandData):
 
 
 if __name__ == "__main__":
+    # Registers the plugin
+    iconFile=bitmaps.BaseBitmap()
+    path, fn = os.path.split(__file__)
+    iconFile.InitWith(os.path.join(path,"res","DynamicRenderRegion.tif"))
+
     plugins.RegisterCommandPlugin(id=PLUGIN_ID,
-                                  str="MW Dynamic Render Region",
+                                  str="MW Dynamic Render Region(Octane)",
                                   info=0,
-                                  help="Set the render region of the selected object.",
+                                  help="Set the Render Region of the selected object.",
                                   dat=MWDynamicRenderRegionCommand(),
-                                  icon=None)
+                                  icon=iconFile)
+
+
+
 
 """
 References:
-
 Get PLA DATA
-https://developers.maxon.net/forum/topic/14305/get-spline-points-positions-from-pla-keyframes/2?_=1732456672668
+    https://developers.maxon.net/forum/topic/14305/get-spline-points-positions-from-pla-keyframes/2?_=1732456672668
 
-AliasTrans
-https://developers.maxon.net/forum/topic/6917/7764_how-to-clone-a-character-skin--skeleton-/3?_=1732504493195
+    AliasTrans
+    https://developers.maxon.net/forum/topic/6917/7764_how-to-clone-a-character-skin--skeleton-/3?_=1732504493195
 
-Object List GUI
-https://developers.maxon.net/forum/topic/10770/14214_inexclude-customgui-in-pythonplugin/2?_=1732760629379
+    Object List GUI
+    https://developers.maxon.net/forum/topic/10770/14214_inexclude-customgui-in-pythonplugin/2?_=1732760629379
 """
