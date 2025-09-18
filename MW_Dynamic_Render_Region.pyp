@@ -293,9 +293,9 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 pointY.append(math.ceil(pointPos.y))
 
         if not pointX or not pointY:
-            gui.MessageDialog("The selected object(s) have no points.\n"
-                        "Please check that they are a polygon mesh or that one is included as a child object.") # 메시지 박스 표시
-            return False 
+            gui.MessageDialog("No points found in the selected object(s).\n"
+                              "If a Subdivision Surface is applied, please disable it and try again.")
+            return False
         return [min(pointX), max(pointX), min(pointY), max(pointY)]
 
 
@@ -429,7 +429,7 @@ class MWDynamicRenderRegionCommand(plugins.CommandData):
             self.dialog = MWDynamicRenderRegion()
 
         # Opens the dialog
-        return self.dialog.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID, defaultw=300, defaulth=100)
+        return self.dialog.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID, defaultw=300, defaulth=800)
 
     def RestoreLayout(self, sec_ref):
         """Used to restore an asynchronous dialog that has been placed in the users layout.
@@ -452,7 +452,7 @@ if __name__ == "__main__":
     # Registers the plugin
     iconFile=bitmaps.BaseBitmap()
     path, fn = os.path.split(__file__)
-    iconFile.InitWith(os.path.join(path,"res","DynamicRenderRegion.tif"))
+    iconFile.InitWith(os.path.join(path,"res","MW_Dynamic_Render_Region.tif"))
 
     plugins.RegisterCommandPlugin(id=PLUGIN_ID,
                                   str="MW Dynamic Render Region(Octane)",
