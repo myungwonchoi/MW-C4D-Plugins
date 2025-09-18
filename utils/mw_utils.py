@@ -1,6 +1,26 @@
 # mw_utils.py, 유틸리티 함수 모듈
 import c4d # 모듈이여도 c4d는 항상 필요
 
+def GetAllObjects(doc):
+    """
+    씬 내의 모든 오브젝트를 리스트로 반환합니다.
+    """
+    result = []
+    def _collect(obj):
+        while obj:
+            result.append(obj)
+            _collect(obj.GetDown())
+            obj = obj.GetNext()
+    _collect(doc.GetFirstObject())
+    return result
+
+def GetObjectsInLayer(doc, layer_obj):
+    """
+    주어진 레이어(layer_obj)에 할당된 모든 오브젝트를 리스트로 반환합니다.
+    """
+    all_objs = GetAllObjects(doc)
+    return [obj for obj in all_objs if obj.GetLayerObject(doc) == layer_obj]
+
 def GetAllChildren(objects, parent=True) -> list:
     """
     입력값은 단일 오브젝트 또는 오브젝트 리스트 모두 허용합니다.
