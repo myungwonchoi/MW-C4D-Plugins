@@ -12,6 +12,7 @@ from utils import mw_utils
 PLUGIN_ID = 1065393 # Plugin ID
 
 class MWDynamicRenderRegion(gui.GeDialog):
+    LAYER_NAME = "MWDynamicRenderRegion"
     ID_BORDER = 2101
     ID_OBJECTSLIST = 2301
     ID_CALCULATE_CURFRAME = 2201
@@ -31,7 +32,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
         # Defines the title of the Dialog
         self.SetTitle("MW Dynamic Render Region(Octane)")
 
-        self.GroupBegin(0, c4d.BFH_SCALEFIT, 1, 1)
+        self.GroupBegin(0, c4d.BFH_SCALEFIT | c4d.BFV_TOP, 1, 1)
         self.GroupBorderSpace(15, 5, 5, 5)
 
         # Add: Get Selected Objects button
@@ -50,7 +51,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
         settings = c4d.BaseContainer()
         # Set accepted object types into InExclude custom GUI settings  
         settings[c4d.DESC_ACCEPT] = accepted
-        self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT, self.INITW, self.INITH, settings)
+        self.objList = self.AddCustomGui(self.ID_OBJECTSLIST, c4d.CUSTOMGUI_INEXCLUDE_LIST, "", c4d.BFH_SCALEFIT, self.INITW, self.INITH*5, settings)
         self.GroupEnd()
 
         # Add Border input field
@@ -262,12 +263,26 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 c4d.EventAdd()
                 gui.MessageDialog("The Render Region has been applied to the current render settings.")
 
+    
     def DeleteRenderRegionGuide(self, doc):
-        """Delete all splines in the document."""
-        for op in doc.GetObjects():
-            if op.GetName().find('MW_OBJECT_RENDER_REGION') != -1:
-                doc.AddUndo(c4d.UNDOTYPE_DELETE, op)
-                op.Remove()
+        """
+        self.LAYER_NAME 레이어에 속한 모든 오브젝트와 레이어 자체를 삭제합니다.
+        """
+        layer_obj = None
+        layer_root = doc.GetLayerObjectRoot()
+        if not layer_root:
+            return
+        for lyr in layer_root.GetChildren():
+            if lyr.GetName() == self.LAYER_NAME:
+                layer_obj = lyr
+                break
+        if not layer_obj:
+            return
+        for op in mw_utils.GetObjectsInLayer(doc, layer_obj):
+            doc.AddUndo(c4d.UNDOTYPE_DELETE, op)
+            op.Remove()
+        doc.AddUndo(c4d.UNDOTYPE_DELETE, layer_obj)
+        layer_obj.Remove()
         c4d.EventAdd()
 
     def GetObjectFrameRange(self, op, rbd):
@@ -300,6 +315,21 @@ class MWDynamicRenderRegion(gui.GeDialog):
 
 
     def ShowObjectRegion(self, pos: dict, doc, rbd, frame=None):
+        # self.LAYER_NAME 레이어 찾기 또는 생성
+        layer_obj = None
+        for lyr in doc.GetLayerObjectRoot().GetChildren() if doc.GetLayerObjectRoot() else []:
+            if lyr.GetName() == self.LAYER_NAME:
+                layer_obj = lyr
+                break
+        if not layer_obj:
+            layer_obj = c4d.documents.LayerObject()
+            layer_obj.SetName(self.LAYER_NAME)
+            layer_obj.InsertUnder(doc.GetLayerObjectRoot())
+            doc.AddUndo(c4d.UNDOTYPE_NEW, layer_obj)
+        # 레이어 잠금 및 선택불가 설정
+        layer_obj[c4d.ID_LAYER_LOCKED] = True
+        layer_obj[c4d.ID_LAYER_MANAGER] = False
+
         # Create a rectangle spline based on the object region
         rectSpline = c4d.BaseObject(c4d.Ospline)
         borderSpline = c4d.BaseObject(c4d.Ospline)
@@ -352,16 +382,17 @@ class MWDynamicRenderRegion(gui.GeDialog):
         rectSpline.SetName('MW_OBJECT_RENDER_REGION_RECTSPLINE')
         borderSpline.SetName('MW_OBJECT_RENDER_REGION_BORDERSPLINE')
 
+        # 레이어 할당
+        rectSpline.SetLayerObject(layer_obj)
+        borderSpline.SetLayerObject(layer_obj)
+
         if frame is not None:
             self.AddVisibilityTrack(rectSpline, frame, doc)
             self.AddVisibilityTrack(borderSpline, frame, doc)
 
         # Insert the rectangle spline into the document
-        rectSpline.ChangeNBit(c4d.NBIT_OHIDE, c4d.NBITCONTROL_SET)
         doc.InsertObject(rectSpline)
         doc.AddUndo(c4d.UNDOTYPE_NEW, rectSpline)
-
-        borderSpline.ChangeNBit(c4d.NBIT_OHIDE, c4d.NBITCONTROL_SET)
         doc.InsertObject(borderSpline)
         doc.AddUndo(c4d.UNDOTYPE_NEW, borderSpline)
         return True
@@ -429,7 +460,7 @@ class MWDynamicRenderRegionCommand(plugins.CommandData):
             self.dialog = MWDynamicRenderRegion()
 
         # Opens the dialog
-        return self.dialog.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID, defaultw=300, defaulth=800)
+        return self.dialog.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID, defaultw=500, defaulth=0)
 
     def RestoreLayout(self, sec_ref):
         """Used to restore an asynchronous dialog that has been placed in the users layout.
