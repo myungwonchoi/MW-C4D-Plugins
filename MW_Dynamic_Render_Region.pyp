@@ -104,7 +104,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
         elif Id == self.ID_CALCULATE_CURFRAME or Id == self.ID_CALCULATE_ALLFRAME: # Calculate 버튼을 눌렀을 때
             doc = c4d.documents.GetActiveDocument()
             doc.StartUndo()
-            border = self.GetInt32(self.ID_BORDER)
+            self.border = self.GetInt32(self.ID_BORDER)
             rdt = doc.GetActiveRenderData()
             rbd = doc.GetRenderBaseDraw()
             safeFrame = rbd.GetSafeFrame()
@@ -151,10 +151,10 @@ class MWDynamicRenderRegion(gui.GeDialog):
                     self.data_Region[0]['x2'] = min((-self.op_Region['x2']  + safeFrame['cr']) / safeFrame_width, 1.0)
                     self.data_Region[0]['y1'] = max((self.op_Region['y1']  - safeFrame['ct']) / safeFrame_height, 0.0)
                     self.data_Region[0]['y2'] = min((-self.op_Region['y2'] + safeFrame['cb']) / safeFrame_height, 1.0)
-                    self.data_Region[0]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
-                    self.data_Region[0]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
-                    self.data_Region[0]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
-                    self.data_Region[0]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
+                    self.data_Region[0]['x1'] = max((self.op_Region['x1'] - self.border - safeFrame['cl']) / safeFrame_width, 0.0)
+                    self.data_Region[0]['x2'] = min((-(self.op_Region['x2'] + self.border) + safeFrame['cr']) / safeFrame_width, 1.0)
+                    self.data_Region[0]['y1'] = max((self.op_Region['y1'] - self.border - safeFrame['ct']) / safeFrame_height, 0.0)
+                    self.data_Region[0]['y2'] = min((-(self.op_Region['y2'] + self.border) + safeFrame['cb']) / safeFrame_height, 1.0)
 
                     self.Enable(self.ID_BAKERENDERREGION, True) # 버튼 활성화
                 elif Id == self.ID_CALCULATE_ALLFRAME: # Calculate All Frames
@@ -175,12 +175,11 @@ class MWDynamicRenderRegion(gui.GeDialog):
                         SetCurrentFrame(iFrame, doc)
                         self.op_Region['x1'], self.op_Region['x2'], self.op_Region['y1'], self.op_Region['y2'] = self.GetObjectFrameRange(op, rbd)
                         self.data_Region.append({})
-                        self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - border - safeFrame['cl']) / safeFrame_width, 0.0)
-                        self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + border) + safeFrame['cr']) / safeFrame_width, 1.0)
-                        self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
-                        self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
+                        self.data_Region[-1]['x1'] = max((self.op_Region['x1'] - self.border - safeFrame['cl']) / safeFrame_width, 0.0)
+                        self.data_Region[-1]['x2'] = min((-(self.op_Region['x2'] + self.border) + safeFrame['cr']) / safeFrame_width, 1.0)
+                        self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - self.border - safeFrame['ct']) / safeFrame_height, 0.0)
+                        self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + self.border) + safeFrame['cb']) / safeFrame_height, 1.0)
                         self.data_Region[-1]['frame'] = iFrame
-                        print('iFrame:', iFrame)
                         self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)
                         c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
 
@@ -249,7 +248,6 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 for iData in self.data_Region:
                     key_x1 = c4d.CKey()
                     key_x1.SetTime(curve_x1, c4d.BaseTime(iData['frame'], doc.GetFps()))
-                    print('BaseTime',iData['frame'] / doc.GetFps())
                     key_x1.SetValue(curve_x1, iData['x1'])
                     curve_x1.InsertKey(key_x1)
                     key_x2 = c4d.CKey()
@@ -360,10 +358,10 @@ class MWDynamicRenderRegion(gui.GeDialog):
         temp_pos['y1'] = min(max(pos['y1'] - border, safeFrame['ct']), safeFrame['cb'])
         temp_pos['y2'] = max(min(pos['y2'] + border, safeFrame['cb']), safeFrame['ct'])
 
-        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x1'], temp_pos['y1'], 200)))
-        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x2'], temp_pos['y1'], 200)))
-        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x2'], temp_pos['y2'], 200)))
-        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x1'], temp_pos['y2'], 200)))
+        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x1'], temp_pos['y1'], 150)))
+        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x2'], temp_pos['y1'], 150)))
+        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x2'], temp_pos['y2'], 150)))
+        borderSpline_pos.append(rbd.SW(c4d.Vector(temp_pos['x1'], temp_pos['y2'], 150)))
 
         # Set the points of the rectangle spline
         rectSpline.SetPoint(0, rectSpline_pos[0])
@@ -431,7 +429,6 @@ class MWDynamicRenderRegion(gui.GeDialog):
         return super().CoreMessage(id, msg)
     
         if id == c4d.EVMSG_CHANGE:
-            # print("EVMSG_CHANGE")
             doc = c4d.documents.GetActiveDocument()
             selected_objs = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_NONE | c4d.GETACTIVEOBJECTFLAGS_SELECTIONORDER)
             if not selected_objs:
@@ -442,8 +439,6 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 inexclude.InsertObject(obj, 1)
             self.objList.SetData(inexclude)
             c4d.EventAdd()
-        
-
 
 class MWDynamicRenderRegionCommand(plugins.CommandData):
     """Command Data class that holds the ExampleDialog instance."""
@@ -494,8 +489,6 @@ if __name__ == "__main__":
                                   help="Set the Render Region of the selected object.",
                                   dat=MWDynamicRenderRegionCommand(),
                                   icon=iconFile)
-
-
 
 
 """
