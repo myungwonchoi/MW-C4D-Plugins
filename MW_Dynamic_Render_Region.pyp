@@ -180,6 +180,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
                         self.data_Region[-1]['y1'] = max((self.op_Region['y1'] - border - safeFrame['ct']) / safeFrame_height, 0.0)
                         self.data_Region[-1]['y2'] = min((-(self.op_Region['y2'] + border) + safeFrame['cb']) / safeFrame_height, 1.0)
                         self.data_Region[-1]['frame'] = iFrame
+                        print('iFrame:', iFrame)
                         self.ShowObjectRegion(self.op_Region, doc, rbd, iFrame)
                         c4d.DrawViews(c4d.DRAWFLAGS_NO_THREAD | c4d.DRAWFLAGS_FORCEFULLREDRAW)
 
@@ -220,6 +221,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 octane[c4d.VP_REGION_X2] = self.data_Region[0]['x2']
                 octane[c4d.VP_REGION_Y1] = self.data_Region[0]['y1']
                 octane[c4d.VP_REGION_Y2] = self.data_Region[0]['y2']
+                c4d.EventAdd()
                 gui.MessageDialog("The Render Region has been applied to the current render settings.")
             elif len(self.data_Region) > 1:
                 # Remove existing tracks if they exist
@@ -231,6 +233,7 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 if existing_track_x2: existing_track_x2.Remove()
                 if existing_track_y1: existing_track_y1.Remove()
                 if existing_track_y2: existing_track_y2.Remove()
+                octane[c4d.VP_RENDERREGION] = True
                 track_x1 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X1, c4d.DTYPE_REAL, 0)))
                 track_x2 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_X2, c4d.DTYPE_REAL, 0)))
                 track_y1 = c4d.CTrack(octane, c4d.DescID(c4d.DescLevel(c4d.VP_REGION_Y1, c4d.DTYPE_REAL, 0)))
@@ -245,19 +248,20 @@ class MWDynamicRenderRegion(gui.GeDialog):
                 curve_y2 = track_y2.GetCurve()
                 for iData in self.data_Region:
                     key_x1 = c4d.CKey()
-                    key_x1.SetTime(curve_x1, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_x1.SetTime(curve_x1, c4d.BaseTime(iData['frame'], doc.GetFps()))
+                    print('BaseTime',iData['frame'] / doc.GetFps())
                     key_x1.SetValue(curve_x1, iData['x1'])
                     curve_x1.InsertKey(key_x1)
                     key_x2 = c4d.CKey()
-                    key_x2.SetTime(curve_x2, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_x2.SetTime(curve_x2, c4d.BaseTime(iData['frame'], doc.GetFps()))
                     key_x2.SetValue(curve_x2, iData['x2'])
                     curve_x2.InsertKey(key_x2)
                     key_y1 = c4d.CKey()
-                    key_y1.SetTime(curve_y1, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_y1.SetTime(curve_y1, c4d.BaseTime(iData['frame'], doc.GetFps()))
                     key_y1.SetValue(curve_y1, iData['y1'])
                     curve_y1.InsertKey(key_y1)
                     key_y2 = c4d.CKey()
-                    key_y2.SetTime(curve_y2, c4d.BaseTime(iData['frame'] / doc.GetFps()))
+                    key_y2.SetTime(curve_y2, c4d.BaseTime(iData['frame'], doc.GetFps()))
                     key_y2.SetValue(curve_y2, iData['y2'])
                     curve_y2.InsertKey(key_y2)
                 c4d.EventAdd()
@@ -272,8 +276,8 @@ class MWDynamicRenderRegion(gui.GeDialog):
         layer_root = doc.GetLayerObjectRoot()
         if not layer_root:
             return
-        for lyr in layer_root.GetChildren():
-            if lyr.GetName() == self.LAYER_NAME:
+        for lyr in layer_root.GetChildren(): # 레이어 루트의 모든 자식 레이어 탐색
+            if lyr.GetName() == self.LAYER_NAME: # self.LAYER_NAME 레이어 찾기
                 layer_obj = lyr
                 break
         if not layer_obj:
@@ -312,7 +316,6 @@ class MWDynamicRenderRegion(gui.GeDialog):
                               "If a Subdivision Surface is applied, please disable it and try again.")
             return False
         return [min(pointX), max(pointX), min(pointY), max(pointY)]
-
 
     def ShowObjectRegion(self, pos: dict, doc, rbd, frame=None):
         # self.LAYER_NAME 레이어 찾기 또는 생성
