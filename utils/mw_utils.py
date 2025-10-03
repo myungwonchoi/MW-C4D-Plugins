@@ -154,3 +154,10 @@ def SelectObjects(objects, doc):
         doc.AddUndo(c4d.UNDOTYPE_BITS, obj)  # 언도 추가
         doc.SetSelection(obj , mode=c4d.SELECTION_ADD)
     c4d.EventAdd()  # 뷰포트 업데이트
+
+"""
+# Note: The following function is commented out because it requires a specific plugin context to work properly.
+static c4d.storage.GeGetPluginPath
+
+
+"""
