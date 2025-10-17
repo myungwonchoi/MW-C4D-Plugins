@@ -7,18 +7,240 @@ import sys
 # Plugin ID
 PLUGIN_ID = 1066547
 
+# Column IDs
+COL_NAME = 0
+COL_DESCRIPTION = 1
+
+class ScriptItem(object):
+    """TreeView의 각 스크립트를 나타내는 객체"""
+    
+    def __init__(self, script_key, script_info):
+        self.script_key = script_key
+        self.name = script_info.get('name', script_key)
+        self.description = script_info.get('description', '')
+        self.tags = script_info.get('tags', [])
+        self.icon = script_info.get('icon', None)
+        self.execute_func = script_info.get('execute', None)
+        self.selected = False
+    
+    @property
+    def IsSelected(self):
+        """선택 상태 반환"""
+        return self.selected
+    
+    def Select(self):
+        """항목 선택"""
+        self.selected = True
+    
+    def Deselect(self):
+        """항목 선택 해제"""
+        self.selected = False
+    
+    def Execute(self):
+        """스크립트 실행"""
+        if self.execute_func and callable(self.execute_func):
+            try:
+                self.execute_func()
+            except Exception as e:
+                c4d.gui.MessageDialog(f"스크립트 실행 중 오류가 발생했습니다:\n{str(e)}")
+        else:
+            c4d.gui.MessageDialog(f"스크립트 '{self.name}'의 실행 함수를 찾을 수 없습니다.")
+    
+    def __repr__(self):
+        return f"ScriptItem({self.name})"
+    
+    def __str__(self):
+        return self.name
+
+
+class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
+    """TreeView를 위한 함수들"""
+    
+    def __init__(self):
+        self.items_list = []
+    
+    def SetItemsList(self, items_list):
+        """스크립트 아이템 리스트를 설정합니다"""
+        self.items_list = items_list
+    
+    def GetFirst(self, root, userdata):
+        """첫 번째 항목을 반환합니다"""
+        return self.items_list[0] if len(self.items_list) else None
+    
+    def GetNext(self, root, userdata, obj):
+        """다음 항목을 반환합니다"""
+        try:
+            idx = self.items_list.index(obj)
+            if idx + 1 < len(self.items_list):
+                return self.items_list[idx + 1]
+        except (ValueError, IndexError):
+            pass
+        return None
+    
+    def GetPred(self, root, userdata, obj):
+        """이전 항목을 반환합니다"""
+        try:
+            idx = self.items_list.index(obj)
+            if idx > 0:
+                return self.items_list[idx - 1]
+        except (ValueError, IndexError):
+            pass
+        return None
+    
+    def GetDown(self, root, userdata, obj):
+        """하위 항목을 반환합니다 (평면 리스트이므로 None)"""
+        return None
+    
+    def GetId(self, root, userdata, obj):
+        """항목의 고유 ID를 반환합니다"""
+        return hash(obj)
+    
+    def GetLineHeight(self, root, userdata, obj, col, area):
+        """라인 높이를 반환합니다"""
+        return area.DrawGetFontHeight() + 4
+    
+    def IsResizeColAllowed(self, root, userdata, lColID):
+        """컬럼 리사이즈 허용"""
+        return True
+    
+    def IsTristate(self, root, userdata):
+        """Tristate 사용 안 함"""
+        return False
+    
+    def GetColumnWidth(self, root, userdata, obj, col, area):
+        """컬럼 너비를 반환합니다"""
+        if col == COL_NAME:
+            if obj:
+                return area.DrawGetTextWidth(obj.name) + 10
+            return 200
+        elif col == COL_DESCRIPTION:
+            if obj:
+                return area.DrawGetTextWidth(obj.description) + 10
+            return 300
+        return 100
+    
+    def GetHeaderColumnWidth(self, root, userdata, col, area):
+        """헤더 컬럼 너비를 반환합니다"""
+        return self.GetColumnWidth(root, userdata, None, col, area)
+    
+    def DrawCell(self, root, userdata, obj, col, drawinfo, bgColor):
+        """셀을 그립니다 - 선택 상태에 따라 색상 변경"""
+        if not obj:
+            return
+        
+        # 텍스트 결정
+        if col == COL_NAME:
+            text = obj.name
+        elif col == COL_DESCRIPTION:
+            text = obj.description
+        else:
+            text = ''
+        
+        canvas = drawinfo["frame"]
+        xpos = drawinfo["xpos"]
+        ypos = drawinfo["ypos"]
+        
+        # 선택 상태에 따라 텍스트 색상 변경 (핵심 부분!)
+        if obj.IsSelected:
+            txtColorDict = canvas.GetColorRGB(c4d.COLOR_TEXT_SELECTED)
+        else:
+            txtColorDict = canvas.GetColorRGB(c4d.COLOR_TEXT)
+        
+        txtColorVector = c4d.Vector(
+            txtColorDict["r"] / 255.0,
+            txtColorDict["g"] / 255.0,
+            txtColorDict["b"] / 255.0
+        )
+        
+        canvas.DrawSetTextCol(txtColorVector, bgColor)
+        canvas.DrawText(text, xpos + 5, ypos + 2)
+    
+    def Select(self, root, userdata, obj, mode):
+        """항목 선택 처리"""
+        if mode == c4d.SELECTION_NEW:
+            # 새로운 선택: 기존 선택 모두 해제
+            for item in self.items_list:
+                item.Deselect()
+            obj.Select()
+        elif mode == c4d.SELECTION_ADD:
+            # 선택 추가 (Ctrl+클릭)
+            obj.Select()
+        elif mode == c4d.SELECTION_SUB:
+            # 선택 제거
+            obj.Deselect()
+    
+    def IsSelected(self, root, userdata, obj):
+        """항목이 선택되었는지 확인"""
+        return obj.IsSelected
+    
+    def GetName(self, root, userdata, obj):
+        """항목 이름을 반환합니다 (LV_TREE 타입용)"""
+        return obj.name if obj else ''
+    
+    def SetName(self, root, userdata, obj, name):
+        """항목 이름 설정 (사용 안 함)"""
+        pass
+    
+    def IsOpened(self, root, userdata, obj):
+        """항목이 열려있는지 (평면 리스트이므로 항상 False)"""
+        return False
+    
+    def Open(self, root, userdata, obj, onoff):
+        """항목 열기/닫기 (사용 안 함)"""
+        pass
+    
+    def GetDragType(self, root, userdata, obj):
+        """드래그 타입 (드래그 사용 안 함)"""
+        return c4d.NOTOK
+    
+    def DragStart(self, root, userdata, obj):
+        """드래그 시작 (사용 안 함)"""
+        return c4d.NOTOK
+    
+    def AcceptDragObject(self, root, userdata, obj, dragtype, dragobject):
+        """드래그 오브젝트 수락 (사용 안 함)"""
+        return c4d.INSERT_NONE
+    
+    def InsertObject(self, root, userdata, obj, dragtype, dragobject, insertmode, bCopy):
+        """오브젝트 삽입 (사용 안 함)"""
+        pass
+    
+    def DoubleClick(self, root, userdata, obj, col, mouseinfo):
+        """더블클릭 이벤트 - 스크립트 실행"""
+        if obj:
+            obj.Execute()
+        return True
+    
+    def DeletePressed(self, root, userdata):
+        """Delete 키 처리 (사용 안 함)"""
+        pass
+
+
 class IMfineToolDialog(c4d.gui.GeDialog):
     """IMfine Tool 메인 다이얼로그"""
     
     # UI IDs
     ID_MAIN_GROUP = 1000
-    ID_SCRIPT_GROUP = 1100
+    ID_FILTER_TAB = 1050
+    ID_TREEVIEW = 1100
     ID_REFRESH_BUTTON = 1200
-    ID_SCRIPT_BUTTON_BASE = 2000  # 스크립트 버튼들의 기본 ID
+    
+    # Tag filter IDs
+    ID_TAG_ALL = 1300
+    ID_TAG_MESH = 1301
+    ID_TAG_ANIMATION = 1302
+    ID_TAG_MATERIAL = 1303
+    ID_TAG_NAMING = 1304
+    
+    # Available tags
+    AVAILABLE_TAGS = ["Mesh", "Animation", "Material", "Naming"]
     
     def __init__(self):
         super().__init__()
         self.scripts = {}
+        self.treeview = None
+        self.treeview_funcs = IMfineTreeViewFunctions()
+        self.current_filter = "All"
         self.LoadScripts()
     
     def LoadScripts(self):
@@ -34,8 +256,8 @@ class IMfineToolDialog(c4d.gui.GeDialog):
             return
         
         # glob을 사용하여 모든 .py 파일 찾기
-        script_pattern = os.path.join(script_module_dir, "*.py") # IMfine_ScriptModule 폴더 내 모든 .py 파일
-        script_files = glob.glob(script_pattern) # .py 파일 리스트
+        script_pattern = os.path.join(script_module_dir, "*.py")
+        script_files = glob.glob(script_pattern)
         
         for script_file in script_files:
             try:
@@ -51,6 +273,11 @@ class IMfineToolDialog(c4d.gui.GeDialog):
                     # get_script_info 함수가 있는지 확인
                     if hasattr(module, 'get_script_info'):
                         script_info = module.get_script_info()
+                        # 태그가 없으면 빈 리스트 설정
+                        if 'tags' not in script_info:
+                            script_info['tags'] = []
+                        if 'icon' not in script_info:
+                            script_info['icon'] = None
                         self.scripts[script_name] = script_info
                         print(f"IMfine Tool: 스크립트 로드됨 - {script_info['name']}")
                     else:
@@ -70,78 +297,118 @@ class IMfineToolDialog(c4d.gui.GeDialog):
         # 타이틀
         self.AddStaticText(0, c4d.BFH_CENTER, name="IMfine Cinema4D Utility Tool", borderstyle=c4d.BORDER_WITH_TITLE_BOLD)
         
+        # 필터 탭 추가
+        bc = c4d.BaseContainer()
+        bc.SetBool(c4d.QUICKTAB_SHOWSINGLE, True)
+        bc.SetBool(c4d.QUICKTAB_SPRINGINGFOLDERS, False)
+        self.filter_tab = self.AddCustomGui(self.ID_FILTER_TAB, c4d.CUSTOMGUI_QUICKTAB, '',
+                                           c4d.BFH_SCALEFIT, 0, 0, bc)
+        
+        if self.filter_tab:
+            self.filter_tab.AppendString(self.ID_TAG_ALL, "All", True)
+            self.filter_tab.AppendString(self.ID_TAG_MESH, "Mesh", False)
+            self.filter_tab.AppendString(self.ID_TAG_ANIMATION, "Animation", False)
+            self.filter_tab.AppendString(self.ID_TAG_MATERIAL, "Material", False)
+            self.filter_tab.AppendString(self.ID_TAG_NAMING, "Naming", False)
+        
         # 새로고침 버튼
         self.AddButton(self.ID_REFRESH_BUTTON, c4d.BFH_SCALEFIT, name="스크립트 새로고침")
         
         # 구분선
         self.AddSeparatorH(0, flags=c4d.BFH_SCALEFIT)
         
-        # 스크립트 버튼 그룹
-        self.GroupBegin(self.ID_SCRIPT_GROUP, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, cols=1)
-        self.CreateScriptButtons()
-        self.GroupEnd()
+        # TreeView 추가
+        customgui = c4d.BaseContainer()
+        customgui.SetBool(c4d.TREEVIEW_BORDER, True)
+        customgui.SetBool(c4d.TREEVIEW_HAS_HEADER, True)
+        customgui.SetBool(c4d.TREEVIEW_HIDE_LINES, True)
+        customgui.SetBool(c4d.TREEVIEW_RESIZE_HEADER, True)
+        customgui.SetBool(c4d.TREEVIEW_MOVE_COLUMN, True)
+        customgui.SetBool(c4d.TREEVIEW_FIXED_LAYOUT, True)
+        customgui.SetBool(c4d.TREEVIEW_NOENTERRENAME, True)
+        customgui.SetBool(c4d.TREEVIEW_ALTERNATE_BG, True)
+        
+        self.treeview = self.AddCustomGui(self.ID_TREEVIEW, c4d.CUSTOMGUI_TREEVIEW, "",
+                                         c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 0, 0, customgui)
+        
+        if self.treeview:
+            # TreeView Functions 설정
+            self.treeview.SetRoot(self.treeview, self.treeview_funcs, None)
+            self.PopulateTreeView()
         
         self.GroupEnd()
         
         return True
     
-    def CreateScriptButtons(self):
-        """스크립트 버튼들을 생성합니다"""
-        if not self.scripts:
-            self.AddStaticText(0, c4d.BFH_CENTER, name="로드된 스크립트가 없습니다.")
+    def GetFilteredScripts(self):
+        """현재 필터에 따라 스크립트 목록을 반환합니다"""
+        if self.current_filter == "All":
+            return self.scripts
+        
+        filtered = {}
+        for key, script_info in self.scripts.items():
+            if self.current_filter in script_info.get('tags', []):
+                filtered[key] = script_info
+        return filtered
+    
+    def PopulateTreeView(self):
+        """TreeView에 스크립트 목록을 채웁니다"""
+        if not self.treeview:
             return
         
-        button_id = self.ID_SCRIPT_BUTTON_BASE
-        for script_key, script_info in self.scripts.items():
-            # 버튼 추가
-            self.AddButton(button_id, c4d.BFH_SCALEFIT, name=script_info['name'])
-            
-            # 설명 텍스트 추가
-            if 'description' in script_info:
-                self.AddStaticText(0, c4d.BFH_LEFT, name=f"  → {script_info['description']}")
-            
-            # 구분선 추가
-            self.AddSeparatorH(0, flags=c4d.BFH_SCALEFIT)
-            
-            button_id += 1
+        # TreeView 초기화
+        layout = c4d.BaseContainer()
+        layout.SetLong(COL_NAME, c4d.LV_USER)
+        layout.SetLong(COL_DESCRIPTION, c4d.LV_USER)
+        self.treeview.SetLayout(2, layout)
+        
+        # 헤더 설정
+        self.treeview.SetHeaderText(COL_NAME, "Script Name")
+        self.treeview.SetHeaderText(COL_DESCRIPTION, "Description")
+        
+        # 데이터 준비
+        filtered_scripts = self.GetFilteredScripts()
+        items_list = []
+        
+        for script_key, script_info in filtered_scripts.items():
+            item = ScriptItem(script_key, script_info)
+            items_list.append(item)
+        
+        # TreeView Functions에 아이템 리스트 설정
+        self.treeview_funcs.SetItemsList(items_list)
+        
+        # TreeView 새로고침
+        self.treeview.Refresh()
     
-    def RefreshScriptButtons(self):
-        """스크립트 버튼들을 새로고침합니다 (기존 버튼들을 제거하고 새로 생성)"""
-        # 스크립트 그룹을 완전히 제거
-        self.LayoutFlushGroup(self.ID_SCRIPT_GROUP)
-        
-        # 스크립트 버튼들을 다시 생성
-        self.CreateScriptButtons()
-        
-        # 레이아웃 변경 사항을 적용
-        self.LayoutChanged(self.ID_SCRIPT_GROUP)
+    def RefreshTreeView(self):
+        """TreeView를 새로고침합니다"""
+        if self.treeview:
+            self.PopulateTreeView()
 
     def Command(self, id, msg):
         """버튼 클릭 이벤트 처리"""
         if id == self.ID_REFRESH_BUTTON:
             # 스크립트 새로고침
             self.LoadScripts()
-            self.RefreshScriptButtons()
+            self.RefreshTreeView()
             c4d.gui.MessageDialog("스크립트가 새로고침되었습니다.")
             
-        elif id >= self.ID_SCRIPT_BUTTON_BASE:
-            # 스크립트 버튼 클릭
-            button_index = id - self.ID_SCRIPT_BUTTON_BASE
-            script_keys = list(self.scripts.keys())
-            
-            if button_index < len(script_keys):
-                script_key = script_keys[button_index]
-                script_info = self.scripts[script_key]
+        elif id == self.ID_FILTER_TAB:
+            # 필터 탭 변경
+            if self.filter_tab:
+                if self.filter_tab.IsSelected(self.ID_TAG_ALL):
+                    self.current_filter = "All"
+                elif self.filter_tab.IsSelected(self.ID_TAG_MESH):
+                    self.current_filter = "Mesh"
+                elif self.filter_tab.IsSelected(self.ID_TAG_ANIMATION):
+                    self.current_filter = "Animation"
+                elif self.filter_tab.IsSelected(self.ID_TAG_MATERIAL):
+                    self.current_filter = "Material"
+                elif self.filter_tab.IsSelected(self.ID_TAG_NAMING):
+                    self.current_filter = "Naming"
                 
-                try:
-                    # 스크립트 실행
-                    if 'execute' in script_info and callable(script_info['execute']):
-                        script_info['execute']()
-                    else:
-                        c4d.gui.MessageDialog(f"스크립트 '{script_info['name']}'의 실행 함수를 찾을 수 없습니다.")
-                        
-                except Exception as e:
-                    c4d.gui.MessageDialog(f"스크립트 실행 중 오류가 발생했습니다:\n{str(e)}")
+                # TreeView 새로고침
+                self.RefreshTreeView()
         
         return True
 

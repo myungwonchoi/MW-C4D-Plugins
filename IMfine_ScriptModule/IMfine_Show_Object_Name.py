@@ -1,4 +1,5 @@
 import c4d
+import os
 
 def execute():
     """
@@ -26,5 +27,7 @@ def get_script_info():
     return {
         "name": "Show Object Name",
         "description": "선택된 오브젝트의 이름을 표시합니다",
+        "tags": ["Naming", "Mesh"],
+        "icon": None,  # 아이콘 경로 (선택사항)
         "execute": execute
     }

@@ -17,5 +17,7 @@ def get_script_info():
     return {
         "name": "Count Objects",
         "description": "선택된 오브젝트의 개수를 표시합니다",
+        "tags": ["Mesh"],
+        "icon": None,
         "execute": execute
     }

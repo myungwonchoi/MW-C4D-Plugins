@@ -46,5 +46,7 @@ def get_script_info():
     return {
         "name": "Show Object Type",
         "description": "선택된 오브젝트의 타입을 표시합니다",
+        "tags": ["Mesh"],
+        "icon": None,
         "execute": execute
     }
