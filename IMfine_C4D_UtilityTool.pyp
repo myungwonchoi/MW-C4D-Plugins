@@ -11,6 +11,17 @@ PLUGIN_ID = 1066547
 COL_NAME = 0
 COL_DESCRIPTION = 1
 
+# 사용 가능한 태그 목록 - 순서대로 탭에 표시
+AVAILABLE_TAGS = ["Mesh", "Animation", "Material", "Naming"]
+
+# 각 태그의 UI ID (자동 생성)
+TAG_ID_MAP = {
+    "All": 1300,  # "All"은 항상 첫 번째
+}
+# 나머지 태그들의 ID 자동 할당
+for idx, tag in enumerate(AVAILABLE_TAGS):
+    TAG_ID_MAP[tag] = 1301 + idx
+
 class ScriptItem(object):
     """TreeView의 각 스크립트를 나타내는 객체"""
     
@@ -20,6 +31,7 @@ class ScriptItem(object):
         self.description = script_info.get('description', '')
         self.tags = script_info.get('tags', [])
         self.icon = script_info.get('icon', None)
+        self.guide_image = script_info.get('guide_image', None)
         self.execute_func = script_info.get('execute', None)
         self.selected = False
     
@@ -53,11 +65,28 @@ class ScriptItem(object):
         return self.name
 
 
+
 class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
     """TreeView를 위한 함수들"""
     
-    def __init__(self):
+    def __init__(self, dialog=None):
         self.items_list = []
+        self.dialog = dialog  # 다이얼로그 참조 저장
+        
+        # 색상 설정
+        self.color_item_normal = c4d.COLOR_TEXT
+        self.color_item_selected = c4d.COLOR_TEXT_SELECTED
+        self.color_background_normal = c4d.COLOR_BG_DARK2
+        self.color_background_alternate = c4d.COLOR_BG_DARK1
+        self.color_background_selected = c4d.COLOR_BG_HIGHLIGHT
+        
+        # 레이아웃 설정
+        self.line_height = 26  # 각 행의 높이
+        self.col_name_width = 200  # 이름 컬럼 기본 너비
+        self.col_description_width = 300  # 설명 컬럼 기본 너비
+        self.col_padding = 20  # 컬럼 내부 여유 공간
+        self.text_offset_x = 5  # 텍스트 X 오프셋
+        self.text_offset_y = 6  # 텍스트 Y 오프셋
     
     def SetItemsList(self, items_list):
         """스크립트 아이템 리스트를 설정합니다"""
@@ -97,7 +126,7 @@ class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
     
     def GetLineHeight(self, root, userdata, obj, col, area):
         """라인 높이를 반환합니다"""
-        return area.DrawGetFontHeight() + 4
+        return self.line_height
     
     def IsResizeColAllowed(self, root, userdata, lColID):
         """컬럼 리사이즈 허용"""
@@ -111,12 +140,12 @@ class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
         """컬럼 너비를 반환합니다"""
         if col == COL_NAME:
             if obj:
-                return area.DrawGetTextWidth(obj.name) + 10
-            return 200
+                return area.DrawGetTextWidth(obj.name) + self.col_padding
+            return self.col_name_width
         elif col == COL_DESCRIPTION:
             if obj:
-                return area.DrawGetTextWidth(obj.description) + 10
-            return 300
+                return area.DrawGetTextWidth(obj.description) + self.col_padding
+            return self.col_description_width
         return 100
     
     def GetHeaderColumnWidth(self, root, userdata, col, area):
@@ -140,11 +169,11 @@ class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
         xpos = drawinfo["xpos"]
         ypos = drawinfo["ypos"]
         
-        # 선택 상태에 따라 텍스트 색상 변경 (핵심 부분!)
+        # 선택 상태에 따라 텍스트 색상 변경
         if obj.IsSelected:
-            txtColorDict = canvas.GetColorRGB(c4d.COLOR_TEXT_SELECTED)
+            txtColorDict = canvas.GetColorRGB(self.color_item_selected)
         else:
-            txtColorDict = canvas.GetColorRGB(c4d.COLOR_TEXT)
+            txtColorDict = canvas.GetColorRGB(self.color_item_normal)
         
         txtColorVector = c4d.Vector(
             txtColorDict["r"] / 255.0,
@@ -152,8 +181,10 @@ class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
             txtColorDict["b"] / 255.0
         )
         
+        # canvas.DrawSetFont(c4d.FONT_BIG) # 기본보다 큰 폰트 크기
         canvas.DrawSetTextCol(txtColorVector, bgColor)
-        canvas.DrawText(text, xpos + 5, ypos + 2)
+        canvas.DrawText(text, xpos + self.text_offset_x, ypos + self.text_offset_y)
+
     
     def Select(self, root, userdata, obj, mode):
         """항목 선택 처리"""
@@ -168,6 +199,20 @@ class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
         elif mode == c4d.SELECTION_SUB:
             # 선택 제거
             obj.Deselect()
+        
+        # 다이얼로그에 선택 변경 알림
+        print(f"IMfine Tool [DEBUG]: Select 함수 - dialog: {self.dialog}, obj: {obj}")
+        if self.dialog and hasattr(self.dialog, 'UpdateGuideImage'):
+            print(f"IMfine Tool [DEBUG]: UpdateGuideImage 호출 준비, obj.IsSelected: {obj.IsSelected if obj else 'obj is None'}")
+            try:
+                self.dialog.UpdateGuideImage(obj)
+                print("IMfine Tool [DEBUG]: UpdateGuideImage 호출 성공")
+            except Exception as e:
+                print(f"IMfine Tool [ERROR]: 가이드 이미지 업데이트 오류 - {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"IMfine Tool [DEBUG]: UpdateGuideImage 호출 불가 - dialog: {self.dialog}, hasattr: {hasattr(self.dialog, 'UpdateGuideImage') if self.dialog else 'N/A'}")
     
     def IsSelected(self, root, userdata, obj):
         """항목이 선택되었는지 확인"""
@@ -214,6 +259,22 @@ class IMfineTreeViewFunctions(c4d.gui.TreeViewFunctions):
     def DeletePressed(self, root, userdata):
         """Delete 키 처리 (사용 안 함)"""
         pass
+    
+    def GetBackgroundColor(self, root, userdata, obj, line, col):
+        """셀의 배경색을 반환합니다"""
+        if not obj:
+            return
+        
+        if obj.IsSelected:
+            bg_color = self.color_background_selected
+        else:
+            if line % 2 == 0:
+                bg_color = self.color_background_normal
+            else:
+                bg_color = self.color_background_alternate
+        
+        return bg_color
+
 
 
 class IMfineToolDialog(c4d.gui.GeDialog):
@@ -224,23 +285,17 @@ class IMfineToolDialog(c4d.gui.GeDialog):
     ID_FILTER_TAB = 1050
     ID_TREEVIEW = 1100
     ID_REFRESH_BUTTON = 1200
-    
-    # Tag filter IDs
-    ID_TAG_ALL = 1300
-    ID_TAG_MESH = 1301
-    ID_TAG_ANIMATION = 1302
-    ID_TAG_MATERIAL = 1303
-    ID_TAG_NAMING = 1304
-    
-    # Available tags
-    AVAILABLE_TAGS = ["Mesh", "Animation", "Material", "Naming"]
+    ID_GUIDE_TEXT = 1250
+    ID_GUIDE_IMAGE = 1260
     
     def __init__(self):
         super().__init__()
         self.scripts = {}
         self.treeview = None
-        self.treeview_funcs = IMfineTreeViewFunctions()
+        self.treeview_funcs = IMfineTreeViewFunctions(dialog=self)  # self 참조 전달
         self.current_filter = "All"
+        self.guide_bitmap_button = None
+        self.current_guide_image = None
         self.LoadScripts()
     
     def LoadScripts(self):
@@ -278,8 +333,18 @@ class IMfineToolDialog(c4d.gui.GeDialog):
                             script_info['tags'] = []
                         if 'icon' not in script_info:
                             script_info['icon'] = None
+                        
+                        # 가이드 이미지 경로 자동 설정
+                        if 'guide_image' not in script_info:
+                            guide_image_path = os.path.join(script_module_dir, f"{script_name}.png")
+                            if os.path.exists(guide_image_path):
+                                script_info['guide_image'] = guide_image_path
+                            else:
+                                script_info['guide_image'] = None
+                        
                         self.scripts[script_name] = script_info
                         print(f"IMfine Tool: 스크립트 로드됨 - {script_info['name']}")
+                        print(f"IMfine Tool [DEBUG]: - guide_image: {script_info.get('guide_image', 'None')}")
                     else:
                         print(f"IMfine Tool: get_script_info 함수를 찾을 수 없습니다 - {script_name}")
                         
@@ -291,13 +356,13 @@ class IMfineToolDialog(c4d.gui.GeDialog):
         self.SetTitle("IMfine Tool")
         
         # 메인 그룹
-        self.GroupBegin(self.ID_MAIN_GROUP, c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, cols=1)
+        self.GroupBegin(self.ID_MAIN_GROUP, c4d.BFH_SCALEFIT, cols=1)
         self.GroupBorderSpace(10, 10, 10, 10)
         
         # 타이틀
         self.AddStaticText(0, c4d.BFH_CENTER, name="IMfine Cinema4D Utility Tool", borderstyle=c4d.BORDER_WITH_TITLE_BOLD)
         
-        # 필터 탭 추가
+        # 필터 탭 추가 (동적 생성)
         bc = c4d.BaseContainer()
         bc.SetBool(c4d.QUICKTAB_SHOWSINGLE, True)
         bc.SetBool(c4d.QUICKTAB_SPRINGINGFOLDERS, False)
@@ -305,11 +370,12 @@ class IMfineToolDialog(c4d.gui.GeDialog):
                                            c4d.BFH_SCALEFIT, 0, 0, bc)
         
         if self.filter_tab:
-            self.filter_tab.AppendString(self.ID_TAG_ALL, "All", True)
-            self.filter_tab.AppendString(self.ID_TAG_MESH, "Mesh", False)
-            self.filter_tab.AppendString(self.ID_TAG_ANIMATION, "Animation", False)
-            self.filter_tab.AppendString(self.ID_TAG_MATERIAL, "Material", False)
-            self.filter_tab.AppendString(self.ID_TAG_NAMING, "Naming", False)
+            # "All" 탭 먼저 추가
+            self.filter_tab.AppendString(TAG_ID_MAP["All"], "All", True)
+            
+            # AVAILABLE_TAGS에서 동적으로 탭 추가
+            for tag in AVAILABLE_TAGS:
+                self.filter_tab.AppendString(TAG_ID_MAP[tag], tag, False)
         
         # 새로고침 버튼
         self.AddButton(self.ID_REFRESH_BUTTON, c4d.BFH_SCALEFIT, name="스크립트 새로고침")
@@ -317,24 +383,59 @@ class IMfineToolDialog(c4d.gui.GeDialog):
         # 구분선
         self.AddSeparatorH(0, flags=c4d.BFH_SCALEFIT)
         
-        # TreeView 추가
+        # TreeView 추가 및 설정
         customgui = c4d.BaseContainer()
-        customgui.SetBool(c4d.TREEVIEW_BORDER, True)
-        customgui.SetBool(c4d.TREEVIEW_HAS_HEADER, True)
-        customgui.SetBool(c4d.TREEVIEW_HIDE_LINES, True)
-        customgui.SetBool(c4d.TREEVIEW_RESIZE_HEADER, True)
-        customgui.SetBool(c4d.TREEVIEW_MOVE_COLUMN, True)
-        customgui.SetBool(c4d.TREEVIEW_FIXED_LAYOUT, True)
-        customgui.SetBool(c4d.TREEVIEW_NOENTERRENAME, True)
-        customgui.SetBool(c4d.TREEVIEW_ALTERNATE_BG, True)
+        customgui.SetBool(c4d.TREEVIEW_BORDER, True) # 테두리 표시
+        customgui.SetBool(c4d.TREEVIEW_HAS_HEADER, True) # 헤더 표시
+        customgui.SetBool(c4d.TREEVIEW_HIDE_LINES, True) # 왼쪽 선 숨기기
+        customgui.SetBool(c4d.TREEVIEW_RESIZE_HEADER, True) # 컬럼 크기 조절 허용
+        customgui.SetBool(c4d.TREEVIEW_MOVE_COLUMN, False) # 컬럼 이동 방지
+        customgui.SetBool(c4d.TREEVIEW_FIXED_LAYOUT, False) # 가변 높이 허용
+        customgui.SetBool(c4d.TREEVIEW_NOENTERRENAME, True) # 엔터로 이름 변경 방지
+        customgui.SetBool(c4d.TREEVIEW_NO_MULTISELECT, True) # 다중 선택 불가
+        # customgui.SetBool(c4d.TREEVIEW_ALTERNATE_BG, False) # GetBackgroundColor 사용하므로 False
+
         
         self.treeview = self.AddCustomGui(self.ID_TREEVIEW, c4d.CUSTOMGUI_TREEVIEW, "",
-                                         c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 0, 0, customgui)
+                                         c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 0, 100, customgui)
         
         if self.treeview:
             # TreeView Functions 설정
             self.treeview.SetRoot(self.treeview, self.treeview_funcs, None)
             self.PopulateTreeView()
+        
+        # 구분선
+        self.AddSeparatorH(0, flags=c4d.BFH_SCALEFIT)
+        
+        # Guide 섹션
+        self.AddStaticText(self.ID_GUIDE_TEXT, c4d.BFH_LEFT, name="Guide", borderstyle=c4d.BORDER_WITH_TITLE_BOLD)
+        
+        # Guide 이미지 표시용 BitmapButton
+        print("IMfine Tool [DEBUG]: BitmapButton 생성 시작")
+        settings = c4d.BaseContainer()
+        settings[c4d.BITMAPBUTTON_BUTTON] = False
+        settings[c4d.BITMAPBUTTON_BORDER] = False
+        settings[c4d.BITMAPBUTTON_TOGGLE] = False
+        settings[c4d.BITMAPBUTTON_DISABLE_FADING] = True
+        settings[c4d.BITMAPBUTTON_ICONID1] = c4d.Ocube # 기본 아이콘 설정
+
+        print(f"IMfine Tool [DEBUG]: BitmapButton 설정: {settings}")
+        
+        self.guide_bitmap_button = self.AddCustomGui(
+            self.ID_GUIDE_IMAGE, 
+            c4d.CUSTOMGUI_BITMAPBUTTON, 
+            "",
+            c4d.BFH_SCALEFIT | c4d.BFV_SCALEFIT, 
+            600, 300,
+            settings
+        )
+        
+        if self.guide_bitmap_button:
+            print("IMfine Tool [DEBUG]: BitmapButton 생성 성공")
+            # 빈 비트맵 생성 (가이드 이미지 선택 전까지 비어있음)
+            print("IMfine Tool [DEBUG]: 초기 빈 상태로 유지")
+        else:
+            print("IMfine Tool [DEBUG]: BitmapButton 생성 실패")
         
         self.GroupEnd()
         
@@ -384,6 +485,54 @@ class IMfineToolDialog(c4d.gui.GeDialog):
         """TreeView를 새로고침합니다"""
         if self.treeview:
             self.PopulateTreeView()
+    
+    def UpdateGuideImage(self, script_item):
+        """가이드 이미지를 업데이트합니다"""
+        print(f"IMfine Tool [DEBUG]: UpdateGuideImage 호출됨, script_item: {script_item}")
+        
+        if not self.guide_bitmap_button:
+            print("IMfine Tool [DEBUG]: guide_bitmap_button이 None입니다")
+            return
+        
+        print(f"IMfine Tool [DEBUG]: guide_bitmap_button 존재함: {self.guide_bitmap_button}")
+        
+        if script_item and script_item.guide_image and os.path.exists(script_item.guide_image):
+            print(f"IMfine Tool [DEBUG]: 가이드 이미지 경로: {script_item.guide_image}")
+            print(f"IMfine Tool [DEBUG]: 파일 존재 확인: {os.path.exists(script_item.guide_image)}")
+            
+            # 가이드 이미지 로드
+            bitmap = c4d.bitmaps.BaseBitmap()
+            print(f"IMfine Tool [DEBUG]: BaseBitmap 생성됨: {bitmap}")
+            
+            result = bitmap.InitWith(script_item.guide_image)
+            print(f"IMfine Tool [DEBUG]: InitWith 결과: {result}")
+            
+            if result[0] == c4d.IMAGERESULT_OK:
+                print("IMfine Tool [DEBUG]: 이미지 로드 성공")
+                self.guide_bitmap_button.SetImage(bitmap, False)
+                print("IMfine Tool [DEBUG]: SetImage 완료")
+                self.current_guide_image = script_item.guide_image
+            else:
+                print(f"IMfine Tool [DEBUG]: 이미지 로드 실패, 결과 코드: {result[0]}")
+                # 이미지 로드 실패 시 빈 비트맵
+                empty_bitmap = c4d.bitmaps.BaseBitmap()
+                empty_bitmap.Init(600, 300)
+                self.guide_bitmap_button.SetImage(empty_bitmap, False)
+                print("IMfine Tool [DEBUG]: 빈 비트맵 설정 완료")
+                self.current_guide_image = None
+        else:
+            print(f"IMfine Tool [DEBUG]: 가이드 이미지 없음")
+            if script_item:
+                print(f"IMfine Tool [DEBUG]: - script_item.guide_image: {script_item.guide_image}")
+                if script_item.guide_image:
+                    print(f"IMfine Tool [DEBUG]: - 파일 존재: {os.path.exists(script_item.guide_image)}")
+            
+            # 가이드 이미지가 없으면 빈 비트맵
+            empty_bitmap = c4d.bitmaps.BaseBitmap()
+            empty_bitmap.Init(600, 300)
+            self.guide_bitmap_button.SetImage(empty_bitmap, False)
+            print("IMfine Tool [DEBUG]: 빈 비트맵 설정 완료")
+            self.current_guide_image = None
 
     def Command(self, id, msg):
         """버튼 클릭 이벤트 처리"""
@@ -394,21 +543,20 @@ class IMfineToolDialog(c4d.gui.GeDialog):
             c4d.gui.MessageDialog("스크립트가 새로고침되었습니다.")
             
         elif id == self.ID_FILTER_TAB:
-            # 필터 탭 변경
+            # 필터 탭 변경 (동적 처리)
             if self.filter_tab:
-                if self.filter_tab.IsSelected(self.ID_TAG_ALL):
-                    self.current_filter = "All"
-                elif self.filter_tab.IsSelected(self.ID_TAG_MESH):
-                    self.current_filter = "Mesh"
-                elif self.filter_tab.IsSelected(self.ID_TAG_ANIMATION):
-                    self.current_filter = "Animation"
-                elif self.filter_tab.IsSelected(self.ID_TAG_MATERIAL):
-                    self.current_filter = "Material"
-                elif self.filter_tab.IsSelected(self.ID_TAG_NAMING):
-                    self.current_filter = "Naming"
+                # 선택된 탭 찾기
+                for tag_name, tag_id in TAG_ID_MAP.items():
+                    if self.filter_tab.IsSelected(tag_id):
+                        self.current_filter = tag_name
+                        break
                 
                 # TreeView 새로고침
                 self.RefreshTreeView()
+        
+        elif id == self.ID_GUIDE_IMAGE:
+            # 가이드 이미지 버튼 클릭 무시 (뷰어 역할만 수행)
+            return True
         
         return True
 
@@ -424,7 +572,7 @@ class IMfineToolCommand(c4d.plugins.CommandData):
             self.dialog = IMfineToolDialog()
         
         # 다이얼로그 열기
-        return self.dialog.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID, defaultw=400, defaulth=500)
+        return self.dialog.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID, defaultw=500, defaulth=600)
     
     def RestoreLayout(self, sec_ref):
         """레이아웃 복원"""
